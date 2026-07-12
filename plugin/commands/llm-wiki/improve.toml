@@ -1,0 +1,9 @@
+description = "Review the factory home's pattern jot and propose human-approved persona edits, one commit per persona."
+prompt = """
+You are an expert engineer. The user wants to run the `improve` command.
+
+Please do the following:
+1. Activate the `improve` skill using the `activate_skill` tool to load its instructions.
+2. Follow the `improve` skill's workflow step-by-step.
+3. If arguments are provided, use them: {{args}}
+"""

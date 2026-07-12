@@ -1,0 +1,30 @@
+# id: unique slug for the team
+id: {{TEAM_ID}}
+
+# name: human-readable team name
+name: "{{TEAM_NAME}}"
+
+# purpose: one-sentence description of what this team does
+purpose: "{{TEAM_PURPOSE}}"
+
+# project: path to the project this team works on
+project: "{{PROJECT_PATH}}"
+
+# members: list of agents and their roles
+members:
+  # agent: roster slug — must match a persona file in the factory home's agents/ directory
+  - agent: {{AGENT_SLUG}}
+    # role: the hat this member wears on THIS team (may differ from their roster role)
+    role: "{{AGENT_ROLE}}"
+    # model: model id to spawn this agent with
+    model: claude-opus-4-8
+    # effort: reasoning effort for this agent (e.g. deep, standard)
+    effort: deep
+    # invocation: optional — when/how this agent is called (e.g. "on-demand — before any copy reaches users")
+    # note: optional — context or constraints for this agent's role
+
+# framework: execution framework (always claude-code-agents for this system)
+framework: claude-code-agents
+
+# orchestration: how agents coordinate (always parallel-then-synthesize for this system)
+orchestration: parallel-then-synthesize

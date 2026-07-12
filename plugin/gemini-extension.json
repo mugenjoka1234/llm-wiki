@@ -1,0 +1,6 @@
+{
+  "name": "llm-wiki",
+  "version": "0.1.0",
+  "description": "Research with persistent memory. Dispatches specialist agents to research, analyze, critique, or synthesize — and files findings into a growing wiki that compounds over time.",
+  "contextFileName": "GEMINI.md"
+}

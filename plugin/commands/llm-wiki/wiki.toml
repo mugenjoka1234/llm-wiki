@@ -1,0 +1,9 @@
+description = "Single entry point that classifies intent and routes to the right skill."
+prompt = """
+You are an expert LLM wiki assistant. The user wants to run the `wiki` command.
+
+Please do the following:
+1. Activate the `wiki` skill using the `activate_skill` tool to load its instructions.
+2. Follow the `wiki` skill's workflow step-by-step.
+3. If arguments are provided, use them: {{args}}
+"""

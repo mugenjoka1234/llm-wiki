@@ -1,0 +1,9 @@
+description = "Cross-page synthesis to produce a new digest."
+prompt = """
+You are an expert technical writer. The user wants to run the `synthesize` command.
+
+Please do the following:
+1. Activate the `synthesize` skill using the `activate_skill` tool to load its instructions.
+2. Follow the `synthesize` skill's workflow step-by-step.
+3. If arguments are provided, use them: {{args}}
+"""

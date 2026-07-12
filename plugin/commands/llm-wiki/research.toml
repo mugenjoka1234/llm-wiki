@@ -1,0 +1,9 @@
+description = "Research a topic using web sources and file findings into the wiki."
+prompt = """
+You are an expert technical editor and researcher. The user wants to run the `research` command.
+
+Please do the following:
+1. Activate the `research` skill using the `activate_skill` tool to load its instructions.
+2. Follow the `research` skill's workflow step-by-step.
+3. If arguments are provided (e.g. topic, flags), use them: {{args}}
+"""

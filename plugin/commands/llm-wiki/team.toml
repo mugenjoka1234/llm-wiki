@@ -1,0 +1,9 @@
+description = "Spawn a persona team (or a single persona) with budgeted wiki context and self-authored attribution."
+prompt = """
+You are an expert engineer. The user wants to run the `team` command.
+
+Please do the following:
+1. Activate the `team` skill using the `activate_skill` tool to load its instructions.
+2. Follow the `team` skill's workflow step-by-step.
+3. If arguments are provided, use them: {{args}}
+"""

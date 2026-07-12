@@ -1,0 +1,22 @@
+{
+  "name": "llm-wiki",
+  "owner": {
+    "name": "Pranay Agrawal"
+  },
+  "metadata": {
+    "description": "A persistent markdown wiki plus an AI-factory layer (budgeted persona teams, idempotent session close, human-gated self-improvement) for Claude Code.",
+    "version": "0.2.0"
+  },
+  "plugins": [
+    {
+      "name": "llm-wiki",
+      "source": "./plugin",
+      "description": "Wiki skills (research, analyze, critique, synthesize, query, lint) plus a Claude-only factory layer (team, session-close, improve) — 16 skills, 6 bundled agents, on a growing markdown wiki.",
+      "author": {
+        "name": "Pranay Agrawal"
+      },
+      "license": "MIT",
+      "keywords": ["research", "wiki", "knowledge-base", "karpathy", "llm-wiki"]
+    }
+  ]
+}

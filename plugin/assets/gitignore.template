@@ -1,0 +1,40 @@
+# macOS
+.DS_Store
+
+# Editor
+*.swp
+*.swo
+*~
+
+# Raw storage — text and images tracked as source evidence; large media gitignored
+# raw/snapshots/*.txt  → verbatim page text captures — TRACKED (last-mile agent context)
+# raw/assets/screenshots/*.png → visual evidence — TRACKED
+# Large media gitignored:
+raw/*.mp4
+raw/*.mp3
+raw/*.mov
+raw/*.zip
+raw/assets/screenshots/.gitkeep
+raw/snapshots/.gitkeep
+raw/_ingest/*
+!raw/_ingest/.gitkeep
+raw/_scrubbed/*
+!raw/_scrubbed/.gitkeep
+
+# PII blocklist — never committed
+wiki/_pii/*
+!wiki/_pii/README.md
+
+# Lint state (machine-regenerated)
+wiki/.lint-state.json
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Obsidian
+.obsidian/workspace*
+.obsidian/cache
+.obsidian/plugins/
+.obsidian/themes/

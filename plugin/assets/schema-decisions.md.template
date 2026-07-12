@@ -1,0 +1,23 @@
+# Schema Decisions — {{DOMAIN}} Wiki
+
+Append-only ADR log for this wiki's schema evolution. Initial entries document the scaffold choices on {{DATE}}; append new entries as the schema changes.
+
+## Format
+
+    ## YYYY-MM-DD — <short headline>
+
+    **Context:** <one paragraph>
+    **Decision:** <what was chosen>
+    **Rationale:** <why>
+    **Trade-off:** <what was accepted>
+    **Status:** active | superseded | reversed
+
+---
+
+## {{DATE}} — Wiki scaffolded via llm-wiki plugin
+
+**Context:** New {{DOMAIN}} wiki initialized.
+**Decision:** Use the llm-wiki plugin's default scaffold (10 entity templates, deterministic lint.py, Dataview-driven index).
+**Rationale:** Consistent starting point across wikis; plugin updates don't propagate automatically so drift is per-wiki.
+**Trade-off:** Per-wiki drift accepted — user controls when to adopt plugin updates.
+**Status:** active

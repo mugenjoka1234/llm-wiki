@@ -1,0 +1,30 @@
+# {{DOMAIN}} Wiki
+
+{{PURPOSE}}
+
+Generated: {{DATE}}
+Maintained by Claude Code via the `llm-wiki` plugin.
+
+## What lives where
+
+- `raw/` — source documents. Immutable. Claude reads but never modifies.
+- `wiki/` — all Claude-maintained content. Entity pages, digests, index, overview, log.
+- `_templates/` — 10 page templates. Claude copies from here when creating a page.
+- `scripts/lint.py` — deterministic lint + PII gate + `_health.md` regeneration.
+- `docs/schema-decisions.md` — ADR log for schema changes specific to this wiki.
+- `CLAUDE.md` — the rulebook. Claude reads this at session start.
+
+## Day-to-day
+
+- Drop a source into `raw/` and tell Claude "ingest `<filename>`"
+- Ask Claude "research X" — the plugin's research skill handles web fetch, citation, and ingest offer
+- Tell Claude "critique [[page]]" — the plugin's critique skill audits claims against sources or challenges with web research
+- Run `python3 scripts/lint.py` anytime for a health check
+
+## Obsidian setup
+
+1. `brew install --cask obsidian`
+2. Open this folder as a vault.
+3. Enable Dataview community plugin for the index views.
+4. Set attachments folder to `raw/assets/`.
+5. Install Obsidian Web Clipper to drop web pages into `raw/`.

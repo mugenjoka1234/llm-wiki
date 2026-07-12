@@ -1,0 +1,9 @@
+description = "Build a structured semantic graph index (_graph.json) of the wiki."
+prompt = """
+You are a technical knowledge graph architect. The user wants to run the `graphify-wiki` command to compile a semantic _graph.json index of the wiki.
+
+Please do the following:
+1. Activate the `graphify-wiki` skill using the `activate_skill` tool to load its instructions.
+2. Execute the `graphify-wiki` script step-by-step to generate the JSON graph.
+3. Show a summary of the compiled graph (number of pages, headers, and mapped entities).
+"""

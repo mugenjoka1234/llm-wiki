@@ -1,0 +1,9 @@
+description = "Rewrite overview.md in place after major ingest sessions."
+prompt = """
+You are an expert editor. The user wants to run the `overview-refresh` command.
+
+Please do the following:
+1. Activate the `overview-refresh` skill using the `activate_skill` tool to load its instructions.
+2. Follow the `overview-refresh` skill's workflow step-by-step.
+3. If arguments are provided, use them: {{args}}
+"""

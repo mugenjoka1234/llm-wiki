@@ -1,0 +1,10 @@
+{
+  "name": "llm-wiki",
+  "version": "0.2.0",
+  "description": "A persistent markdown wiki plus an AI-factory layer (budgeted persona teams, idempotent session close, human-gated self-improvement) for Claude Code.",
+  "author": {
+    "name": "Pranay Agrawal"
+  },
+  "keywords": ["research", "wiki", "knowledge-base", "karpathy", "llm-wiki"],
+  "license": "MIT"
+}

@@ -1,0 +1,9 @@
+description = "Scaffold or adopt a project: wiki + docs_path + factory home registration."
+prompt = """
+You are an expert engineer. The user wants to run the `factory-init` command.
+
+Please do the following:
+1. Activate the `factory-init` skill using the `activate_skill` tool to load its instructions.
+2. Follow the `factory-init` skill's workflow step-by-step.
+3. If arguments are provided, use them: {{args}}
+"""

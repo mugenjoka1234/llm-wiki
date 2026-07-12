@@ -1,0 +1,11 @@
+What Is Native Computer Use in AI Models? GPT-5.4 and Beyond
+  URL: https://www.mindstudio.ai/blog/what-is-native-computer-use-ai-models
+  On simpler single-domain tasks, success rates are considerably higher. These benchmarks are useful reference points, but they have limitations.
+
+Computer-Using Agent - OpenAI
+  URL: https://openai.com/index/computer-using-agent/
+  In this benchmark, CUA achieves 38.1% success rate. We observed test-time scaling, meaning CUA's performance improves when more steps are ...
+
+Browser Use vs Operator vs Claude Computer Use (2026)
+  URL: https://particula.tech/blog/browser-use-vs-operator-vs-claude-computer-use-web-agents
+  On WebVoyager, Browser Use reports the highest score at 89.1% across 586 live web tasks, ahead of OpenAI's Computer-Using Agent at 87%. But the ...

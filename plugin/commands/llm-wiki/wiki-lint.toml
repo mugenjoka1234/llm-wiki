@@ -1,0 +1,9 @@
+description = "Run the deterministic lint pass on the current wiki."
+prompt = """
+You are an expert technical editor. The user wants to run the `wiki-lint` command.
+
+Please do the following:
+1. Activate the `wiki-lint` skill using the `activate_skill` tool to load its instructions.
+2. Follow the `wiki-lint` skill's workflow step-by-step.
+3. If arguments are provided, use them: {{args}}
+"""

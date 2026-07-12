@@ -1,0 +1,9 @@
+description = "Manual ingest fallback; also runs the PII gate."
+prompt = """
+You are an expert technical reviewer. The user wants to run the `wiki-ingest` command.
+
+Please do the following:
+1. Activate the `wiki-ingest` skill using the `activate_skill` tool to load its instructions.
+2. Follow the `wiki-ingest` skill's workflow step-by-step.
+3. If arguments are provided, use them: {{args}}
+"""

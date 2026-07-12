@@ -1,0 +1,218 @@
+# {{DOMAIN}} Wiki — Schema & Workflows
+
+This is the rulebook for the {{DOMAIN}} wiki. It turns Claude from a generic chatbot into a disciplined wiki maintainer. Read fully at session start; do not skim.
+
+**Generated:** {{DATE}}
+**ADR log:** `docs/schema-decisions.md`
+
+---
+
+## Purpose
+
+{{PURPOSE}}
+
+The wiki is **persistent external memory for agents and humans**. Every research session preserves source material at multiple levels of detail. Agents can navigate from high-level summaries down to verbatim source text without re-fetching anything from the web.
+
+## Three-tier storage model
+
+This wiki stores source material at three levels. Agents should choose the right tier for their task:
+
+| Tier | Location | What it contains | When to use |
+|---|---|---|---|
+| **Summary** | `wiki/` entity pages | Curated claims, open questions, strategic implications | Orientation, quick answers, entity relationships |
+| **Synthesis** | `wiki/digests/` | Structured claims with `→ [[entity]]` links, scope/purpose of source | Connecting sources to entities, understanding what was captured |
+| **Raw** | `raw/` | Original source material at full fidelity | Last-mile context, exact wording, agent reasoning at depth |
+
+Within `raw/`:
+- `raw/research-*.md` — agent-synthesized research with structured findings + citations
+- `raw/snapshots/*.txt` — **verbatim accessibility tree captures** of individual web pages (full text of the source at capture time)
+- `raw/assets/screenshots/*.png` — visual captures of pages
+- `raw/MANIFEST.md` — catalog of all sources with ingest status
+
+**For agents doing precise analysis:** read the entity page for orientation, then go to `raw/snapshots/` for the exact source text. This avoids re-fetching and preserves the information as it existed at capture time.
+
+---
+
+## When to consult this wiki
+
+Before answering any question about {{DOMAIN}}, check the wiki:
+
+1. **TRIGGER** — Does the task involve a named entity, a claim needing sourcing, a comparison, or a gap? If yes, check. Skip only for purely mechanical tasks. Default posture: check first. False positive = 2 seconds. False negative = user trust.
+2. **ORIENT** — Read `wiki/index.md §Agent Catalog` only. Scan ✓/△/? prefixes. Note matching entities and ? gaps. Note open questions in the questions catalog section.
+3. **SELECT** — Pick 3–5 pages. Prefer ✓ over △. For "what do we know" → entity pages. For "latest research" → `digests/catalog.md`. For gaps → `questions/` pages. Cap at 15 total; one hop on `related:`/`sources:`.
+4. **CLASSIFY** — Know well (confidence:high, 0 open-Qs, <90d) · Know partially (confidence:med OR open-Qs OR stale) · Don't know (no matching pages).
+5. **ANSWER + BRIDGE** — Cite `[[wikilinks]]` for every non-obvious claim. For gaps: name the gap, share what IS known, list open-Qs verbatim, offer to research or file as a question page. Never speculate silently.
+
+---
+
+## Hard rules
+
+1. `raw/` is immutable. Never modify files in `raw/`. Exceptions: you may write to `raw/_ingest/` (transactional plan files) and `raw/_scrubbed/` (pre-scrub output). Both are gitignored.
+2. No PII in `wiki/` or `wiki/digests/`. See `## PII scrub` for the two-stage gate.
+3. Every entity page has required frontmatter + Overview + Open questions. No exceptions.
+4. Wikilinks only in frontmatter `sources`/`related`. Use relative paths only for `raw/` assets.
+5. Dates live in frontmatter (`last-updated`, `quarter`, `ingested`), not in filenames. Exception: decisions and experiments use date-prefix in filename.
+6. New section headings must match the style guide (§ Style guide). Do not invent synonyms.
+7. Before writing a page, run `python3 scripts/lint.py --check-content <path> --wiki-root .` to gate PII.
+8. Frontmatter must be VALID YAML — Obsidian's Dataview rejects the whole block on syntax errors. Wikilink lists use multi-line form with quoted items.
+
+---
+
+## Entity types
+
+{{ENTITY_TYPES}}
+
+Entity types are also declared in `schema.yaml` at the wiki root for machine-readable access by lint.py. If `schema.yaml` exists, lint.py uses it instead of this section. Keep them in sync.
+
+---
+
+## Frontmatter
+
+Every entity page has this frontmatter shape (multi-line YAML is required for wikilink lists):
+
+```yaml
+type: <one of the entity types above>
+status: active | archived | superseded | draft | running | complete | shipped | planned | deprecated | cancelled | reversed
+last-updated: YYYY-MM-DD
+quarter: YYYY-QN
+okr: []
+confidence: high | med | low
+sources:
+  - "[[digest-slug]]"
+related:
+  - "[[slug]]"
+tags: [topic-tag]
+```
+
+**`summary:`** Required for entity and question pages. Write as an answer-preview — what question does this page answer, not what the document is.
+- ❌ `"Shopify competitor analysis"` — bibliographic, useless for navigation
+- ✅ `"Shopify: 70+ reports all plans; ShopifyQL query language; no Z report capability"` — answers "what does Shopify offer?"
+
+Minimum 40 chars. lint.py warns if missing or too short.
+
+Synthesis pages (index, overview, glossary, people, _health) add `as-of: YYYY-MM-DD`.
+Source digests add `source-path`, `ingested`, `pii-workflow`, and (if pre-scrub) `scrub-approved-by`, `scrub-approved-at`.
+
+---
+
+## Style guide for section names
+
+{{SECTION_NAMES}}
+
+---
+
+## Workflows
+
+### Ingest — low-sensitivity source (scrub-at-ingest)
+
+Transactional via plan file for crash recovery.
+
+1. Read source from `raw/`. Confirm the file exists and is text-parseable.
+2. Write ingest plan to `raw/_ingest/<slug>.plan.md` with target pages, new pages, frontmatter updates.
+3. Discuss 1-2 paragraphs of key takeaways with the user. Ask what to emphasize.
+4. PII scrub: run stage 1 (semantic rewrite), then stage 2 regex gate via `python3 scripts/lint.py --check-content <candidate> --wiki-root .`. If stage 2 returns non-zero, abort and switch to pre-scrub workflow.
+5. Write `wiki/digests/<slug>.md` from `_templates/source.md`.
+6. For each target page: update frontmatter `sources`/`related` and body content.
+7. Append log entry to `wiki/log/<current-quarter>.md`.
+8. Mark MANIFEST entry ingested (see MANIFEST format below).
+9. Delete the plan file.
+10. Report summary.
+
+### Ingest — sensitive source (pre-scrub)
+
+Triggered when: source path contains `interview`, `case-`, `customer`, `ticket`, `transcript`; or stage 2 regex gate fails; or user explicitly requests pre-scrub.
+
+1. Read source from `raw/`.
+2. Write scrubbed copy to `raw/_scrubbed/<slug>.md`.
+3. Run stage 2 gate on the scrubbed file until clean.
+4. Produce a diff summary for the user (counts of redactions + quasi-ID risks).
+5. Show user both files; wait for approval.
+6. On approval, write `scrub-approved-by` / `scrub-approved-at` to scrubbed file frontmatter.
+7. Without approval: hard stop.
+8. After approval, run the standard ingest steps against the scrubbed file.
+9. Original source stays in `raw/`, never quoted into `wiki/`.
+
+### Query
+
+1. Read `wiki/index.md` for orientation.
+2. Grep frontmatter for matching `type` and `tags`.
+3. Read top-5 candidate pages.
+4. If more context needed, fan out via wikilinks — ONE HOP ONLY.
+5. Cap at ~15 pages per query; tell user if more needed.
+6. Synthesize answer with `[[wikilink]]` citations.
+7. Offer to file the answer back into the wiki.
+
+### Lint — Pass A (deterministic)
+
+Run: `python3 scripts/lint.py`
+
+- Validates frontmatter on every `.md` under `wiki/` (top-level underscore-prefix dirs skipped: `_drafts`, `_archive`, `_pii`, `_health.md`)
+- Flags stale pages (`last-updated` > 90d AND `status: active`)
+- Flags orphan pages (no inbound links, excluding `type: source` and `type: synthesis`)
+- Regenerates `wiki/_health.md`
+- Exit 0 healthy, 1 warnings, 2 schema errors
+
+---
+
+## PII scrub rules
+
+Two stages. Stage 1 is semantic (you do it). Stage 2 is deterministic (the script does it). Stage 2 is the gate.
+
+### Stage 1 — Semantic rewrite
+
+- Pseudonymize names → segment role.
+- Redact contacts → `[redacted]` for emails, phones, addresses, order IDs.
+- Aggregate individual quotes → segment-level claims with hedging.
+- Retain internal case IDs as audit references.
+- Retain public info (public company names, public earnings/press quotes).
+- If a claim cannot survive the scrub meaningfully, drop it.
+
+### Stage 2 — Deterministic regex gate
+
+`python3 scripts/lint.py --check-content <path> --wiki-root .` — MUST pass before any write to `wiki/` or `digests/`. On failure: either switch to pre-scrub or add the matching identifier to `wiki/_pii/blocklist.txt` and re-run.
+
+---
+
+## MANIFEST.md line format
+
+Each source in `raw/MANIFEST.md` is one list item under a date-headed section:
+
+```
+- [ ] `<filename>` — <category> • <sensitivity> — pending-ingest
+- [x] `<filename>` — <category> • <sensitivity> — ingested YYYY-MM-DD → wiki/digests/<slug>.md
+- [ ] `<filename>` — <category> • <sensitivity> — blocked: pii — flagged at lines L1,L2,...
+```
+
+State transitions: pending-ingest → ingested (on scrub-pass) | blocked:pii (on scrub-fail). Edit the line in place; do not append duplicates.
+
+---
+
+## Log format
+
+```
+## [YYYY-MM-DD HH:MM] <verb> — [[slug]] | touched: [p1, p2, ...] | <summary>
+```
+
+Verbs: `ingest | query | lint | scrub | rewrite | archive | scaffold | session` (`session` is written by `/session-close`). Log files: `wiki/log/YYYY-QN.md`, one per quarter.
+
+## Claim tags & trust markup
+
+Every numeric claim in body prose (currency, percentages, magnitudes,
+multipliers, integers ≥ 3 digits) must sit in a paragraph carrying at least
+one of: a source tag (`[internal::file]`, `[internal::data]`,
+`[external::web-search]`, `[external::claude-knowledge]`), a `[[wikilink]]`
+to the backing page, a URL, `[hypothesis]`, `[verified: YYYY-MM-DD]`, or
+`[REFUTED]`. Lint enforces this (error). To suppress a false positive, add
+`%%[no-claim]%%` to the paragraph — invisible in Obsidian reading view,
+greppable in source. Dates, quarters, versions, and bare years never count
+as claims.
+
+Trust markup: mark fact-checked claims `[verified: YYYY-MM-DD]`, unvalidated
+ones `[hypothesis]`, and disproven ones ~~struck through~~ with `[REFUTED]`.
+Lint maintains a visible `> Trust: N verified · N hypothesis · N refuted`
+line under each marked page's title, and the index catalog shows the ratio.
+
+Readability: initiative, segment, and content-synthesis pages open with a
+`## Bottom line` section (2-4 sentences of position, not topic description).
+`overview.md` must keep `## Current theses` populated — a link list is not
+an overview. Source-less pages are capped at `confidence: low`.

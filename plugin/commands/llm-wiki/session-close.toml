@@ -1,0 +1,9 @@
+description = "Idempotent end-of-session wrap-up: sweep, session page, overview/log upkeep, factory-home jot, relint."
+prompt = """
+You are an expert engineer. The user wants to run the `session-close` command.
+
+Please do the following:
+1. Activate the `session-close` skill using the `activate_skill` tool to load its instructions.
+2. Follow the `session-close` skill's workflow step-by-step.
+3. If arguments are provided, use them: {{args}}
+"""

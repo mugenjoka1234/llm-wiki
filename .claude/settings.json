@@ -1,0 +1,21 @@
+{
+  "extraKnownMarketplaces": {
+    "llm-wiki": {
+      "source": {
+        "source": "settings",
+        "name": "llm-wiki",
+        "plugins": [
+          {
+            "name": "llm-wiki",
+            "description": "Research with persistent memory. 7 skills for research, analysis, critique, synthesis, and wiki management.",
+            "source": {
+              "source": "git-subdir",
+              "url": "mugenjoka1234/llm-wiki",
+              "path": "plugin"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

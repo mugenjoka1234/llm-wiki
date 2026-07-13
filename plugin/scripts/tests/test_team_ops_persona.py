@@ -1,3 +1,6 @@
+import contextlib
+import io
+import json
 import os
 import tempfile
 import unittest
@@ -77,6 +80,136 @@ class TestValidatePersona(unittest.TestCase):
             result = team_ops.validate_persona(path, ["acme-launch"])
             self.assertFalse(result["ok"])
             self.assertIn("denylist: acme-launch", result["errors"])
+
+    def test_project_none_is_byte_identical_to_omitting_the_arg(self):
+        """Regression: reuses the denylist-hit fixture/inputs above. Passing
+        `project=None` explicitly must produce the exact same output as not
+        passing `project` at all — the new parameter must not perturb
+        today's behavior in any way."""
+        with tempfile.TemporaryDirectory() as td:
+            path = _write(Path(td), "wren.md", PERSONA_DENYLIST_HIT.format(
+                name="Wren", role="Domain Lead",
+                description="Use when testing parser behavior."))
+            without_arg = team_ops.validate_persona(path, ["acme-launch"])
+            with_none = team_ops.validate_persona(path, ["acme-launch"], project=None)
+            self.assertEqual(without_arg, with_none)
+            self.assertFalse(with_none["ok"])
+            self.assertIn("denylist: acme-launch", with_none["errors"])
+
+
+class TestValidatePersonaProject(unittest.TestCase):
+    """`--project` / `project=` own-name exemption: a project-layer persona
+    copy mentions its own project by design and must not be refused for it,
+    while every OTHER denylisted name must still be refused in that SAME
+    call."""
+
+    def test_own_project_name_is_exempted(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = _write(Path(td), "wren.md", PERSONA_DENYLIST_HIT.format(
+                name="Wren", role="Domain Lead",
+                description="Use when testing parser behavior."))
+            result = team_ops.validate_persona(path, ["acme-launch"], project="acme-launch")
+            self.assertTrue(result["ok"], result["errors"])
+            self.assertEqual(result["errors"], [])
+
+    def test_different_project_name_still_errors_in_same_call(self):
+        """Dual assertion in one call: the persona's OWN project passes
+        (exempted) while a DIFFERENT denylisted project mentioned in the
+        same file still refuses."""
+        with tempfile.TemporaryDirectory() as td:
+            text = PERSONA_DENYLIST_HIT.format(
+                name="Wren", role="Domain Lead",
+                description="Use when testing parser behavior.")
+            text = text.replace(
+                "## Identity\nWren was staffed on the acme-launch project and knows it well.",
+                "## Identity\nWren was staffed on the acme-launch project and knows it "
+                "well, alongside the beta-corp-x rollout.")
+            path = _write(Path(td), "wren.md", text)
+
+            result = team_ops.validate_persona(
+                path, ["acme-launch", "beta-corp-x"], project="acme-launch")
+
+            self.assertFalse(result["ok"])
+            self.assertNotIn("denylist: acme-launch", result["errors"])
+            self.assertIn("denylist: beta-corp-x", result["errors"])
+
+    def test_project_not_in_denylist_changes_nothing(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = _write(Path(td), "wren.md", PERSONA_DENYLIST_HIT.format(
+                name="Wren", role="Domain Lead",
+                description="Use when testing parser behavior."))
+            baseline = team_ops.validate_persona(path, ["acme-launch"])
+            result = team_ops.validate_persona(
+                path, ["acme-launch"], project="some-other-project")
+            self.assertEqual(baseline, result)
+
+    def test_project_name_semantics_is_registry_entry_basename(self):
+        """The name a caller passes via --project must match the SAME
+        basename semantics `build_denylist` uses for registry entries
+        (`Path(entry["path"]).name`), not the raw registered path. Build a
+        real registry fixture, derive the denylist through `build_denylist`,
+        and pass the resulting basename as `project` — proving the own-name
+        exemption lines up with registry-derived names."""
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td) / "factory-home"
+            (home / "agents").mkdir(parents=True)
+            (home / "teams").mkdir()
+            (Path(td) / "registry.txt").write_text(
+                f"!factory_home|{home}\n"
+                "/tmp/nested/path/acme-research|acme-research|2026-01-01|2026-01-01\n")
+            with mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_DATA": td}):
+                denylist = team_ops.build_denylist(home)
+
+            # Basename semantics: the derived name is the final path
+            # component, not the full registered path.
+            self.assertIn("acme-research", denylist)
+            self.assertNotIn("/tmp/nested/path/acme-research", denylist)
+
+            text = PERSONA_DENYLIST_HIT.format(
+                name="Wren", role="Domain Lead",
+                description="Use when testing parser behavior.").replace(
+                    "acme-launch", "acme-research")
+            path = _write(Path(td), "wren.md", text)
+
+            hit = team_ops.validate_persona(path, denylist)
+            self.assertFalse(hit["ok"])
+            self.assertIn("denylist: acme-research", hit["errors"])
+
+            exempted = team_ops.validate_persona(path, denylist, project="acme-research")
+            self.assertTrue(exempted["ok"], exempted["errors"])
+
+
+class TestValidatePersonaCLIProjectFlag(unittest.TestCase):
+    """CLI plumbing: `validate-persona <path> --project NAME`."""
+
+    def _run_main(self, argv):
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            exit_code = team_ops.main(argv)
+        return exit_code, json.loads(stdout.getvalue())
+
+    def test_cli_project_flag_exempts_own_name(self):
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "registry.txt").write_text(
+                "/tmp/nested/path/acme-research|acme-research|2026-01-01|2026-01-01\n")
+            text = PERSONA_DENYLIST_HIT.format(
+                name="Wren", role="Domain Lead",
+                description="Use when testing parser behavior.").replace(
+                    "acme-launch", "acme-research")
+            path = _write(Path(td), "wren.md", text)
+
+            with mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_DATA": td}):
+                exit_without, result_without = self._run_main(
+                    ["validate-persona", str(path)])
+                exit_with, result_with = self._run_main(
+                    ["validate-persona", str(path), "--project", "acme-research"])
+
+            self.assertEqual(exit_without, 1)
+            self.assertFalse(result_without["ok"])
+            self.assertIn("denylist: acme-research", result_without["errors"])
+
+            self.assertEqual(exit_with, 0)
+            self.assertTrue(result_with["ok"], result_with["errors"])
 
 
 class TestBuildDenylist(unittest.TestCase):

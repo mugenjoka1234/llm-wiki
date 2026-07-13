@@ -21,9 +21,12 @@ Usage:
       partial — missing members are data, not an error). Exit 2 when the
       factory home is absent/missing or the team file does not exist; a
       JSON error with a hint is printed to stdout in that case too.
-  team_ops.py validate-persona <path>
+  team_ops.py validate-persona <path> [--project NAME]
       Validate a persona file's frontmatter/anchors; JSON on stdout. Exit 0
       when ok, 1 when there are errors, 2 when the path isn't a file.
+      --project NAME exempts that exact registry-basename from the denylist
+      for this call only (a project-layer persona copy mentions its own
+      project by design); every other denylisted name still refuses.
   team_ops.py upgrade-persona <path> [--description TEXT]
       Idempotently add a missing description / fence Immutable Anchors;
       JSON on stdout. Exit 0, or 2 when the path isn't a file.
@@ -214,7 +217,7 @@ def _frontmatter_description(text: str) -> str | None:
     return value or None
 
 
-def validate_persona(path: Path, denylist: list[str]) -> dict:
+def validate_persona(path: Path, denylist: list[str], project: str | None = None) -> dict:
     """Validate a persona file's frontmatter, citation anchor, and denylist.
 
     Returns {"ok": bool, "errors": [...], "warnings": [...]}.
@@ -227,6 +230,15 @@ def validate_persona(path: Path, denylist: list[str]) -> dict:
     Warnings: description not starting with "Use when"; no
     "## Immutable Anchors" heading; the heading is present but not yet
     fenced with the IMMUTABLE markers.
+
+    `project`: when given, that EXACT name is removed from the effective
+    denylist for this call only — nothing else changes. This is the
+    own-name exemption for a project-layer persona copy, which mentions its
+    own project by design; every other denylisted name still refuses. Name
+    semantics match `build_denylist`'s registry-derived names: the registry
+    entry's basename (`Path(entry["path"]).name`), not the raw registered
+    path. `project=None` (the default) is byte-identical to today's
+    behavior — `build_denylist` itself is untouched.
     """
     text = path.read_text()
     errors: list[str] = []
@@ -246,8 +258,11 @@ def validate_persona(path: Path, denylist: list[str]) -> dict:
     if "CITATION_STANDARD" not in text:
         errors.append("missing citation anchor (CITATION_STANDARD)")
 
+    effective_denylist = denylist if project is None \
+        else [name for name in denylist if name != project]
+
     lower_text = text.lower()
-    for name in denylist:
+    for name in effective_denylist:
         if name.lower() in lower_text:
             errors.append(f"denylist: {name}")
 
@@ -967,14 +982,14 @@ def _resolve_factory_home_best_effort() -> Path:
     return Path(recorded) if recorded else Path("/nonexistent-factory-home")
 
 
-def _cmd_validate_persona(path_str: str) -> int:
+def _cmd_validate_persona(path_str: str, project: str | None = None) -> int:
     path = Path(path_str)
     if not path.is_file():
         print(json.dumps({"ok": False, "errors": [f"persona file not found: {path}"],
                           "warnings": []}))
         return 2
     denylist = build_denylist(_resolve_factory_home_best_effort())
-    result = validate_persona(path, denylist)
+    result = validate_persona(path, denylist, project=project)
     print(json.dumps(result))
     return 0 if result["ok"] else 1
 
@@ -1080,6 +1095,9 @@ def main(argv: list[str] | None = None) -> int:
     validate_p = subparsers.add_parser(
         "validate-persona", help="Validate a persona file's frontmatter and anchors.")
     validate_p.add_argument("path", help="Path to the persona .md file.")
+    validate_p.add_argument(
+        "--project", default=None,
+        help="This project's own registry-basename: exempted from the denylist for this call.")
 
     upgrade_p = subparsers.add_parser(
         "upgrade-persona",
@@ -1116,7 +1134,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.subcommand == "resolve-team":
         return _cmd_resolve_team(args.name)
     if args.subcommand == "validate-persona":
-        return _cmd_validate_persona(args.path)
+        return _cmd_validate_persona(args.path, args.project)
     if args.subcommand == "upgrade-persona":
         return _cmd_upgrade_persona(args.path, args.description)
     if args.subcommand == "assemble-context":

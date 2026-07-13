@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Work on `main` of `/Users/pranayagrawal/Documents/GitHub/llm-wiki-poc-main` (two-repo topology: see `CLAUDE.local.md` — run its leak-sweep before every push; do NOT push mid-plan, the controller pushes).
+- Work on `main` of the plugin repo checkout (two-repo topology: see `CLAUDE.local.md` — run its leak-sweep before every push; do NOT push mid-plan, the controller pushes).
 - All existing CLI contracts are frozen: additions must be optional args/new subcommands; every existing test passes unchanged.
 - Atomic writes via the existing tmp+rename helpers. No network anywhere except Task 1's maintainer-only sync script.
 - Commit trailers as used on this branch (Co-Authored-By + Claude-Session).

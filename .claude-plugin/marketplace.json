@@ -5,7 +5,7 @@
   },
   "metadata": {
     "description": "A persistent markdown wiki plus an AI-factory layer (budgeted persona teams, idempotent session close, human-gated self-improvement) for Claude Code.",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "plugins": [
     {

@@ -123,12 +123,16 @@ class TestStarterRoster(unittest.TestCase):
                 len(referenced), 1,
                 f"{slug}: must defer to >=1 teammate by role")
 
-            # No dangling reference: any capitalized role-like phrase in the
-            # defers text that names a teammate must be a canonical role. We
-            # verify positively — every ROLE we can find is canonical by
-            # construction; guard against a teammate named by a NON-canonical
-            # variant by requiring the referenced set be a subset of ROLES.
-            self.assertTrue(referenced <= ROLES, f"{slug}: dangling role ref")
+            # No dangling reference: the Defers-on line names each teammate as
+            # a parenthesized role phrase, e.g. "... of the model (Marketplace
+            # Economist)". Parse every parenthesized phrase and require each to
+            # be a canonical role. A future edit adding "(Chief Scientist)" —
+            # or any non-canonical variant of a real role — FAILS here.
+            parenthesized = re.findall(r"\(([^)]+)\)", defers)
+            self.assertTrue(parenthesized, f"{slug}: no parenthesized role refs")
+            for phrase in parenthesized:
+                self.assertIn(phrase.strip(), ROLES,
+                              f"{slug}: dangling role ref '{phrase.strip()}'")
 
     # 7. No two personas share a name.
     def test_names_are_unique(self):

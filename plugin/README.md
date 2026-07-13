@@ -1,6 +1,6 @@
 # llm-wiki
 
-**A persistent wiki, plus an AI-factory layer on top.** A Claude Code plugin that dispatches specialist agents to research, analyze, critique, and synthesize — filing findings into a growing markdown wiki that compounds over time — and, once a factory home is registered, spawns budgeted persona teams that read that wiki, close out sessions idempotently, and propose their own instruction edits for human approval.
+**A persistent wiki, plus an AI-factory layer on top.** A Claude Code plugin that dispatches specialist agents to research, analyze, critique, and synthesize — filing findings into a growing markdown wiki that compounds over time — and, once a factory home is registered, guides a user through staffing a team, spawns budgeted persona teams that read that wiki, close out sessions idempotently, and propose their own instruction edits for human approval.
 
 Built on Karpathy's [LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
 
@@ -25,8 +25,9 @@ Twelve wiki skills, invokable from any Claude Code (or Gemini CLI, via the bundl
 
 Six bundled specialist agents (wiki-planner, wiki-researcher, wiki-analyst, wiki-analyst-haiku, wiki-critic, wiki-synthesizer) — invoked by the skills above via plugin-namespaced subagent dispatch.
 
-Four Claude-only factory skills sit on top of the wiki skills once a factory
-home is registered:
+Five factory skills sit on top of the wiki skills once a factory home is
+registered — four Claude-only, plus `/staff`, which also runs on the Gemini
+CLI shim (with documented degradation):
 
 ### /llm-wiki:factory-init
 
@@ -35,6 +36,30 @@ to `wiki-init`), a deliverables tree (`docs_path`), factory-home
 registration, and default-team selection. Supersedes `wiki-init` for new
 projects; `--adopt` brings an existing wiki up to date without touching its
 content.
+
+### /staff
+
+Guides a user through staffing a whole team in one session, from an empty
+(or partially staffed) factory home: a context-first interview against a
+fixed 7-item checklist (confirm-or-correct from project/wiki/factory-home
+context, one question at a time, coverage fixed but wording composed fresh),
+a triage of any shared corp docs into working guidelines, persona-shaping
+material, or a wiki-ingest offer (approval before any write, never
+auto-ingest), a doctrine-driven slate proposal (decision coverage,
+complementing the user's own expertise, tension by design, a domain
+conscience, sharp-but-deferring boundaries, a small active bench, and
+evidence-style diversity), and layered hiring — generic hires land in the
+factory home's roster, client-flavored hires split into a project-level
+persona copy at `<wiki-root>/personas/` instead. Candidates are sourced from
+a bundled starter roster, the vendored ~270-persona `agency-agents` catalog,
+and the factory home's own `references/`; every hire is validated and shown
+as a diff before writing. `factory-init` hands off here when a roster is
+empty; `/team recruit` remains the single-hire shortcut. Unlike the other
+four factory skills, `/staff` also runs on the Gemini CLI shim: plain-text
+questions instead of structured option pickers, unified diffs printed inline
+for approval, and a closing note to open Claude Code for the first `/team`
+session instead of a direct handoff. Use when the user says "/staff", "staff
+my team", "help me hire", or "build my agent team".
 
 ### /team
 

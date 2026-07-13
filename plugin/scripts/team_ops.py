@@ -39,6 +39,17 @@ Usage:
       when unchanged (ok), exit 1 when changed/malformed (not ok), exit 2
       when either path is unreadable. These exit codes are the /improve
       skill's branch points; keep them exact.
+  team_ops.py search-candidates --query "<terms>" [--division D]
+                                 [--source starter|catalog|references|all]
+      Rank staffing candidates across the starter roster
+      (assets/starter-roster/, may not exist yet), the vendored
+      agency-agents catalog (assets/agency-agents/, division = first
+      directory component), and a factory home's references/** pool
+      (recursive, frontmatter files only; requires a resolvable factory
+      home). JSON {"results": [{name, source, division, description, path,
+      score}, ...]} on stdout, plus "suggestions": [<catalog division
+      names>] when results is empty. Exit 0 always, except exit 2 when
+      --source references is requested and no factory home is resolvable.
 """
 from __future__ import annotations
 
@@ -755,6 +766,160 @@ def assemble_context(home: Path, wiki_root: Path, persona_file: Path) -> dict:
     }
 
 
+# --- Candidate search across starter/catalog/references pools --------------
+#
+# search_candidates ranks candidate persona files for staffing across three
+# pools: the starter roster (assets/starter-roster/ — Plan 3 content, may
+# not exist yet), the vendored agency-agents catalog (assets/agency-agents/,
+# division = first directory component under the catalog root), and a
+# factory home's references/** pool (user-curated, recursive, frontmatter
+# files only). Scoring is deliberately simple and deterministic:
+# case-insensitive term overlap against name + description (+ `domain:`
+# tags where present — starter/references personas in full factory format
+# carry `domain:`; the vendored catalog does not). Ties break starter >
+# references > catalog (the user's own curated pools outrank the generic
+# catalog), then name.
+#
+# Catalog frontmatter is NOT factory format (no `domain:`, no fenced
+# anchors) — only `name:`/`description:` are guaranteed. `description:` is
+# read via `_frontmatter_description`, never the generic `_frontmatter`
+# reader above: `_frontmatter` cannot follow a folded/literal block scalar
+# (`description: >-` / `description: |`) and would hand back the bare
+# indicator string instead of the continuation text (see its docstring).
+# The live vendored catalog happens to use single-line descriptions today
+# (verified against the real files), but nothing guarantees that survives a
+# future re-sync, so every source reads description the robust way.
+
+_SOURCE_PRIORITY = {"starter": 0, "references": 1, "catalog": 2}
+SEARCH_SOURCES = ("starter", "catalog", "references")
+
+
+def _plugin_root() -> Path:
+    """The plugin/ directory, derived from this file's own location — the
+    CLAUDE_PLUGIN_ROOT-equivalent lookup that works whether or not the
+    plugin is actually installed via CLAUDE_PLUGIN_ROOT. Mirrors
+    sync_agency_agents.py's DEFAULT_DEST derivation."""
+    return Path(__file__).resolve().parent.parent
+
+
+def _catalog_root() -> Path:
+    return _plugin_root() / "assets" / "agency-agents"
+
+
+def _starter_root() -> Path:
+    return _plugin_root() / "assets" / "starter-roster"
+
+
+def _division_for(root: Path, path: Path) -> str | None:
+    """First directory component of `path` relative to `root`, or None when
+    `path` sits directly at `root` (a root-level file with no division —
+    e.g. the catalog's ATTRIBUTION.md — or a flat starter-roster/references
+    pool with no subdirectories)."""
+    parts = path.relative_to(root).parts
+    return parts[0] if len(parts) > 1 else None
+
+
+def _search_candidate(path: Path, source: str, division: str | None) -> dict | None:
+    """Build a raw candidate dict from a persona/agent markdown file, or
+    None when it has no parseable frontmatter or no `name:` (the
+    references/ pool may hold arbitrary non-agent files; skip those
+    silently rather than erroring)."""
+    text = path.read_text()
+    fm = _frontmatter(path)
+    name = fm.get("name")
+    if not name:
+        return None
+    description = _frontmatter_description(text) or ""
+    domain = fm.get("domain", [])
+    domain_tags = domain if isinstance(domain, list) else []
+    return {
+        "name": name,
+        "source": source,
+        "division": division,
+        "description": description,
+        "path": str(path.resolve()),
+        "_domain_tags": domain_tags,
+    }
+
+
+def _search_pool(root: Path, source: str, require_division: bool) -> list[dict]:
+    """All candidates under `root` for one source. A missing `root` yields
+    an empty list, never an error — the starter roster and a home's
+    references/ dir may both legitimately not exist yet."""
+    if not root.is_dir():
+        return []
+    candidates = []
+    for p in sorted(root.rglob("*.md")):
+        division = _division_for(root, p)
+        if require_division and division is None:
+            continue  # root-level file (e.g. catalog's ATTRIBUTION.md), not a persona
+        c = _search_candidate(p, source, division)
+        if c:
+            candidates.append(c)
+    return candidates
+
+
+def catalog_divisions() -> list[str]:
+    """Division names (top-level directories) present in the vendored
+    catalog, sorted. Used to populate search-candidates' zero-match
+    "suggestions" regardless of whatever query/division/source filters
+    produced the zero-match result."""
+    root = _catalog_root()
+    if not root.is_dir():
+        return []
+    return sorted(p.name for p in root.iterdir() if p.is_dir())
+
+
+def search_candidates(query: str, home: Path | None, division: str | None,
+                       source: str) -> list[dict]:
+    """Rank staffing candidates across the starter/catalog/references pools.
+
+    `source` is one of "starter", "catalog", "references", "all". When
+    "references" (or "all") is requested but `home` is None, the references
+    pool simply contributes nothing — this is a pure function and never
+    raises; the CLI (not this function) is responsible for treating an
+    unusable `--source references` (no resolvable home) as an error
+    (exit 2).
+
+    `division` filters to candidates whose derived division matches
+    case-insensitively (a candidate with no division — e.g. a flat starter
+    roster entry — never matches a division filter).
+
+    Returns only candidates with a nonzero term-overlap score, ranked by
+    score descending, then source priority (starter > references >
+    catalog), then name.
+    """
+    sources = SEARCH_SOURCES if source == "all" else (source,)
+
+    candidates: list[dict] = []
+    if "starter" in sources:
+        candidates.extend(_search_pool(_starter_root(), "starter", require_division=False))
+    if "catalog" in sources:
+        candidates.extend(_search_pool(_catalog_root(), "catalog", require_division=True))
+    if "references" in sources and home is not None:
+        candidates.extend(_search_pool(home / "references", "references", require_division=False))
+
+    if division is not None:
+        want = division.lower()
+        candidates = [c for c in candidates if (c["division"] or "").lower() == want]
+
+    terms = [t for t in re.split(r"\s+", query.strip().lower()) if t]
+
+    scored: list[dict] = []
+    for c in candidates:
+        haystack = " ".join(
+            [c["name"], c["description"], " ".join(c["_domain_tags"])]).lower()
+        score = sum(1 for t in terms if t in haystack)
+        if score <= 0:
+            continue
+        entry = {k: v for k, v in c.items() if k != "_domain_tags"}
+        entry["score"] = score
+        scored.append(entry)
+
+    scored.sort(key=lambda c: (-c["score"], _SOURCE_PRIORITY[c["source"]], c["name"]))
+    return scored
+
+
 def _resolve_factory_home_best_effort() -> Path:
     """Best-effort factory home, for callers that work even without one.
 
@@ -829,6 +994,28 @@ def _cmd_anchors_unchanged(original_str: str, edited_str: str) -> int:
     return 0 if result["ok"] else 1
 
 
+def _cmd_search_candidates(query: str, division: str | None, source: str) -> int:
+    reg_path = resolve_wiki._default_registry_path()
+    recorded = resolve_wiki.load_factory_home(reg_path)
+    home = Path(recorded) if recorded and resolve_wiki.is_factory_home(Path(recorded)) else None
+
+    if source == "references" and home is None:
+        print(json.dumps({
+            "results": [],
+            "error": ("factory home not registered or moved — the references "
+                      "pool requires a resolvable factory home; run: "
+                      "python3 resolve_wiki.py register-factory-home <path>"),
+        }))
+        return 2
+
+    results = search_candidates(query, home, division, source)
+    out: dict = {"results": results}
+    if not results:
+        out["suggestions"] = catalog_divisions()
+    print(json.dumps(out))
+    return 0
+
+
 def _cmd_resolve_team(name: str) -> int:
     reg_path = resolve_wiki._default_registry_path()
     recorded = resolve_wiki.load_factory_home(reg_path)
@@ -882,6 +1069,16 @@ def main(argv: list[str] | None = None) -> int:
     anchors_p.add_argument("original", help="Path to the original persona .md file.")
     anchors_p.add_argument("edited", help="Path to the edited persona .md file.")
 
+    search_p = subparsers.add_parser(
+        "search-candidates",
+        help="Search starter/catalog/references pools for staffing candidates.")
+    search_p.add_argument("--query", required=True, help="Search terms.")
+    search_p.add_argument("--division", default=None,
+                           help="Filter to a specific division (directory name).")
+    search_p.add_argument("--source", default="all",
+                           choices=["starter", "catalog", "references", "all"],
+                           help="Which candidate pool(s) to search (default: all).")
+
     args = parser.parse_args(argv)
 
     if args.subcommand == "resolve-team":
@@ -894,6 +1091,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_assemble_context(args.wiki_root, args.persona)
     if args.subcommand == "anchors-unchanged":
         return _cmd_anchors_unchanged(args.original, args.edited)
+    if args.subcommand == "search-candidates":
+        return _cmd_search_candidates(args.query, args.division, args.source)
 
     parser.print_help()
     return 2

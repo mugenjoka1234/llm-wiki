@@ -1,4 +1,5 @@
 """Fixture builders for team_ops tests. Stdlib only."""
+import hashlib
 import tempfile
 from pathlib import Path
 
@@ -153,6 +154,53 @@ members:
     invocation: "on-demand — only when: needed"
 framework: claude-code-agents
 """
+
+
+# --- Layered-resolution fixtures (project-copy personas, --wiki-root) ------
+
+PERSONA_PROJECT_COPY = """---
+name: {name}
+role: {role}
+description: {description}
+base-slug: {base_slug}
+forked: {forked}
+base-hash: {base_hash}
+version: v1.0
+---
+
+# {name} — {role}
+
+## Identity
+{name} was staffed on the {project} project and knows it well.
+
+## Immutable Anchors (cannot change)
+
+<!-- IMMUTABLE:BEGIN -->
+- Never fabricates data
+- **Always attribute claims.** Every claim must carry a source tag per `CITATION_STANDARD.md`.
+<!-- IMMUTABLE:END -->
+
+## Mutable Instructions (can evolve)
+
+- Output format
+"""
+
+
+def sha256_text(text: str) -> str:
+    """sha256 hex digest of `text`'s UTF-8 bytes — mirrors how team_ops
+    hashes a persona file's bytes (`path.read_bytes()`), for fixtures that
+    build the expected hash from a string template rather than a file."""
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def make_project_copy(wiki_root: Path, slug: str, text: str) -> Path:
+    """Write a project-copy persona to `<wiki_root>/personas/<slug>.md`,
+    creating the `personas/` directory if needed. Returns the written path."""
+    personas_dir = wiki_root / "personas"
+    personas_dir.mkdir(parents=True, exist_ok=True)
+    path = personas_dir / f"{slug}.md"
+    path.write_text(text)
+    return path
 
 
 def make_factory_home(tmp: Path, personas=("ada",), team_yaml=TEAM_YAML) -> Path:

@@ -16,11 +16,28 @@ YAML subset contract (hand-rolled, stdlib only — no PyYAML on this machine):
     contain colons (e.g. `invocation: "on-demand — only when: needed"`).
 
 Usage:
-  team_ops.py resolve-team <name>
+  team_ops.py resolve-team <name> [--wiki-root W]
       Resolve a team's members; JSON on stdout. Exit 0 on success (including
       partial — missing members are data, not an error). Exit 2 when the
       factory home is absent/missing or the team file does not exist; a
       JSON error with a hint is printed to stdout in that case too.
+      --wiki-root W: layered resolution — each member resolves
+      `<W>/personas/<agent>.md` first (the project layer), falling back to
+      `<factory-home>/agents/<agent>.md` (the factory layer). Every resolved
+      member dict gains `"layer": "project"|"factory"`; a project-layer hit
+      also gains `"project": "<W-basename>"` and, when the copy's
+      provenance frontmatter shows the base has since changed, a
+      `"drift_notice"` string. Omitting --wiki-root is byte-identical to
+      today's factory-only behavior (only the `"layer": "factory"` key is
+      new on every member).
+  team_ops.py resolve-persona <slug> [--wiki-root W]
+      Resolve a single persona by slug with the same project-over-factory
+      precedence as resolve-team (used by /team's solo invocation, which
+      previously hand-rolled a factory-only path check). JSON `{"file":
+      ..., "layer": ...}` on stdout (+ `"project"`/`"drift_notice"` when a
+      project-layer hit applies — see resolve-team above). Exit 0 on a hit,
+      exit 2 when the factory home is absent/missing or the slug resolves
+      in neither layer.
   team_ops.py validate-persona <path> [--project NAME]
       Validate a persona file's frontmatter/anchors; JSON on stdout. Exit 0
       when ok, 1 when there are errors, 2 when the path isn't a file.
@@ -34,6 +51,14 @@ Usage:
       Assemble a budgeted per-persona context manifest (orientation files +
       self-authored prior positions); JSON on stdout. Exit 0, or 2 when the
       wiki root or persona path is unreadable.
+  team_ops.py ack-fork <copy-path>
+      Acknowledge a project-copy persona's drift from its base: recompute
+      the base's current sha256 (resolved via the copy's `base-slug`
+      frontmatter against the registered factory home) and rewrite the
+      copy's `base-hash:` frontmatter line — ONLY that line — to the new
+      value, atomically (tmp+rename). JSON `{"acked": true, "base_hash":
+      <new hex digest>}` on stdout. Exit 2 when the copy's frontmatter has
+      no `base-slug`, or when `<home>/agents/<base-slug>.md` doesn't exist.
   team_ops.py anchors-unchanged <original> <edited>
       Verify the fenced Immutable Anchors survived an edit: byte-identical
       content, well-formed marker structure, and unchanged section location
@@ -57,6 +82,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -148,12 +174,28 @@ def parse_team_yaml(text: str) -> dict:
     return result
 
 
-def resolve_team(home: Path, team_name: str) -> dict:
-    """Resolve `<home>/teams/<team_name>.yaml` against personas in `<home>/agents/`.
+def resolve_team(home: Path, team_name: str, wiki_root: Path | None = None) -> dict:
+    """Resolve `<home>/teams/<team_name>.yaml` against personas, layered.
+
+    When `wiki_root` is given, each member resolves `<wiki_root>/personas/
+    <agent>.md` first (the project layer — a full-file supersession by
+    slug, never a merge); otherwise (or when no project copy exists) it
+    falls back to `<home>/agents/<agent>.md` (the factory layer). Omitting
+    `wiki_root` (the default, `None`) is byte-identical to today's
+    factory-only behavior except every resolved member additionally carries
+    `"layer": "factory"`.
 
     Returns {"team": <meta>, "members": [...resolved...], "missing": [...]}.
-    Members whose persona file is missing are DATA (listed in "missing"),
-    not an error — only a nonexistent team file raises TeamError.
+    Members whose persona file is missing from BOTH layers are DATA (listed
+    in "missing"), not an error — only a nonexistent team file raises
+    TeamError. Each resolved member dict gains:
+      - `"layer"`: `"project"` or `"factory"`.
+      - `"project"` (project layer only): the wiki root's basename,
+        VERBATIM as derived from the path (`Path(wiki_root).resolve().name`)
+        — so a caller can pass it straight back as `validate-persona
+        --project <this value>` without re-deriving it itself.
+      - `"drift_notice"` (project layer only, and only when it fires): see
+        `_drift_notice`.
     """
     team_file = home / "teams" / f"{team_name}.yaml"
     if not team_file.is_file():
@@ -167,15 +209,110 @@ def resolve_team(home: Path, team_name: str) -> dict:
     missing: list[dict] = []
     for member in members:
         agent = member.get("agent")
-        persona_file = home / "agents" / f"{agent}.md"
-        if persona_file.is_file():
-            entry = dict(member)
-            entry["file"] = str(persona_file)
-            resolved.append(entry)
-        else:
+        hit = _resolve_persona_path(home, agent, wiki_root)
+        if hit is None:
             missing.append({"agent": agent, "role": member.get("role")})
+            continue
+        persona_file, layer = hit
+        entry = dict(member)
+        entry["file"] = str(persona_file)
+        entry["layer"] = layer
+        if layer == "project":
+            entry["project"] = Path(wiki_root).resolve().name
+            notice = _drift_notice(persona_file, home)
+            if notice:
+                entry["drift_notice"] = notice
+        resolved.append(entry)
 
     return {"team": meta, "members": resolved, "missing": missing}
+
+
+# --- Layered persona resolution (--wiki-root precedence, layer, drift) ------
+#
+# A project-level persona COPY at `<wiki_root>/personas/<slug>.md` supersedes
+# the factory-home persona of the same slug whenever a team (or solo
+# invocation) runs in that project — full-file supersession, never a merge.
+# `_resolve_persona_path` is the single precedence rule both `resolve_team`
+# and `resolve_persona` (the solo-lookup machinery) share.
+
+def _resolve_persona_path(home: Path, agent: str, wiki_root: Path | None
+                           ) -> tuple[Path, str] | None:
+    """Resolve one persona slug against the project layer (if `wiki_root` is
+    given) first, falling back to the factory layer. Returns `(path,
+    layer)`, or None when the slug resolves in NEITHER layer."""
+    if wiki_root is not None:
+        project_file = Path(wiki_root) / "personas" / f"{agent}.md"
+        if project_file.is_file():
+            return project_file, "project"
+    factory_file = home / "agents" / f"{agent}.md"
+    if factory_file.is_file():
+        return factory_file, "factory"
+    return None
+
+
+def _layer_for_path(persona_file: Path, wiki_root: Path | None) -> str:
+    """`"project"` when `persona_file` resolves under `<wiki_root>/personas/`,
+    else `"factory"`. Used by `assemble_context`, which receives an
+    already-resolved persona path rather than re-deriving precedence."""
+    if wiki_root is not None:
+        personas_dir = (Path(wiki_root) / "personas").resolve()
+        try:
+            persona_file.resolve().relative_to(personas_dir)
+            return "project"
+        except ValueError:
+            pass
+    return "factory"
+
+
+def _drift_notice(persona_file: Path, home: Path) -> str | None:
+    """Spawn-time drift-notice backstop for a project-layer persona copy.
+
+    Reads the copy's provenance frontmatter (`base-slug:`, `base-hash:` —
+    via `_frontmatter`, fine for these plain scalars) and compares the
+    CURRENT sha256 of `<home>/agents/<base-slug>.md`'s bytes against the
+    recorded `base-hash`. Fires (returns the notice string) only when
+    `base-hash` is present AND the base file exists AND the hashes differ.
+    Any missing piece — no `base-slug`, no `base-hash`, or the named base
+    file no longer exists — returns None SILENTLY: this is a best-effort
+    backstop, never an error path.
+    """
+    fm = _frontmatter(persona_file)
+    base_slug = fm.get("base-slug")
+    base_hash = fm.get("base-hash")
+    if not base_slug or not base_hash:
+        return None
+    base_file = home / "agents" / f"{base_slug}.md"
+    if not base_file.is_file():
+        return None
+    current_hash = hashlib.sha256(base_file.read_bytes()).hexdigest()
+    if current_hash == base_hash:
+        return None
+    return (f"base {base_slug} has changed since this copy forked — "
+            f"review the copy or run ack-fork")
+
+
+def resolve_persona(home: Path, slug: str, wiki_root: Path | None = None) -> dict | None:
+    """Resolve a single persona by slug with the same project-over-factory
+    precedence as `resolve_team` (one member, not a whole team-YAML roster) —
+    the machinery contract behind `/team`'s solo invocation, which
+    previously hand-rolled a factory-only `ls` + path check directly in the
+    SKILL.
+
+    Returns `{"file": <str>, "layer": "project"|"factory"}` (+ `"project"`
+    and, when it fires, `"drift_notice"` — see `resolve_team`'s docstring
+    for both) on a hit, or None when `slug` resolves in NEITHER layer.
+    """
+    hit = _resolve_persona_path(home, slug, wiki_root)
+    if hit is None:
+        return None
+    persona_file, layer = hit
+    result: dict = {"file": str(persona_file), "layer": layer}
+    if layer == "project":
+        result["project"] = Path(wiki_root).resolve().name
+        notice = _drift_notice(persona_file, home)
+        if notice:
+            result["drift_notice"] = notice
+    return result
 
 
 # --- Persona validation + idempotent lazy upgrade ---------------------------
@@ -460,6 +597,83 @@ def _atomic_write(path: Path, text: str) -> None:
     tmp.replace(path)  # atomic
 
 
+class AckForkError(Exception):
+    """Raised when `ack_fork` cannot proceed: the copy's frontmatter has no
+    `base-slug`, or the base persona it names no longer exists."""
+
+
+_BASE_HASH_LINE_RE = re.compile(r'^(base-hash:[ \t]*)(.*)$', re.MULTILINE)
+
+
+def _rewrite_base_hash_line(text: str, new_hash: str) -> tuple[str, bool]:
+    """Rewrite ONLY the frontmatter `base-hash:` value line to `new_hash`,
+    preserving whatever quote style the line already used (unquoted, or
+    wrapped in the same quote character) and leaving every other byte of
+    `text` untouched. The search is confined to the frontmatter block (via
+    `_FRONTMATTER_RE`) so a coincidental `base-hash:`-looking line in the
+    persona's body is never touched. Returns `(new_text, replaced)` —
+    `replaced` is False when there is no frontmatter block or no
+    `base-hash:` line in it; `ack_fork` only calls this after confirming
+    `base-slug`/`base-hash` are readable via `_frontmatter`, so that
+    branch is not expected to fire in practice, but this fails soft
+    (no write) rather than silently corrupting the file."""
+    m = _FRONTMATTER_RE.match(text)
+    if not m:
+        return text, False
+
+    def _sub(match: re.Match) -> str:
+        prefix, old_val = match.group(1), match.group(2).strip()
+        if len(old_val) >= 2 and old_val[0] == old_val[-1] and old_val[0] in ('"', "'"):
+            quote = old_val[0]
+            return f"{prefix}{quote}{new_hash}{quote}"
+        return f"{prefix}{new_hash}"
+
+    fm_block = m.group(1)
+    new_fm_block, count = _BASE_HASH_LINE_RE.subn(_sub, fm_block, count=1)
+    if count == 0:
+        return text, False
+    return text[:m.start(1)] + new_fm_block + text[m.end(1):], True
+
+
+def ack_fork(copy_path: Path, home: Path) -> dict:
+    """Acknowledge a project-copy persona's drift from its base: recompute
+    the base's current hash and rewrite the copy's recorded `base-hash` to
+    match — "deliberately forked" going forward, per the spec's
+    spawn-time-drift-notice design. Re-resolving the copy afterward (via
+    `resolve_team`/`resolve_persona`) no longer fires `_drift_notice`.
+
+    Reads the copy's `base-slug` frontmatter (via `_frontmatter`), resolves
+    it against `<home>/agents/<base-slug>.md`, hashes that file's CURRENT
+    bytes (sha256), and rewrites ONLY the copy's `base-hash:` line
+    (`_rewrite_base_hash_line`), atomically (tmp+rename via
+    `_atomic_write`) — no-op write when the recomputed hash is already the
+    line's value is still performed (idempotent re-ack is harmless; this
+    function does not special-case "already matches" the way
+    `upgrade_persona` special-cases "nothing to change").
+
+    Returns `{"acked": True, "base_hash": <new hex digest>}`.
+
+    Raises `AckForkError` — the CLI turns this into exit 2 — when:
+      - the copy's frontmatter has no `base-slug`.
+      - `<home>/agents/<base-slug>.md` does not exist.
+    """
+    text = copy_path.read_text()
+    fm = _frontmatter(copy_path)
+    base_slug = fm.get("base-slug")
+    if not base_slug:
+        raise AckForkError(f"copy has no base-slug: {copy_path}")
+
+    base_file = home / "agents" / f"{base_slug}.md"
+    if not base_file.is_file():
+        raise AckForkError(f"base persona not found: {base_file}")
+
+    new_hash = hashlib.sha256(base_file.read_bytes()).hexdigest()
+    new_text, replaced = _rewrite_base_hash_line(text, new_hash)
+    if replaced:
+        _atomic_write(copy_path, new_text)
+    return {"acked": True, "base_hash": new_hash}
+
+
 def upgrade_persona(path: Path, description: str | None) -> dict:
     """Idempotently upgrade a persona file: add a missing description, fence
     the Immutable Anchors section. Atomic write (tmp+rename); no-op (no
@@ -677,7 +891,17 @@ def assemble_context(home: Path, wiki_root: Path, persona_file: Path) -> dict:
                                            summary fallback>"}, ...],
        "budget": {"focus_pages": ORIENTATION_FOCUS_PAGES,
                   "prior_positions": PRIOR_POSITIONS_LIMIT},
-       "warnings": [...]}   # e.g. missing index.md/overview.md; never fails
+       "warnings": [...],   # e.g. missing index.md/overview.md; never fails
+       "layer": "project"|"factory"}  # derived from persona_file's path
+                                       # prefix: under `wiki_root/personas/`
+                                       # -> project, else factory. No
+                                       # signature change — the caller
+                                       # already resolved persona_file (via
+                                       # resolve_team/resolve_persona) before
+                                       # calling assemble_context, so the
+                                       # SAME wiki_root argument already
+                                       # accepted here is reused to derive
+                                       # the layer rather than re-resolving.
 
     Focus-tag pages: persona frontmatter `domain:` list (may be absent, in
     which case there are no focus pages) intersected case-insensitively
@@ -778,6 +1002,7 @@ def assemble_context(home: Path, wiki_root: Path, persona_file: Path) -> dict:
         "budget": {"focus_pages": ORIENTATION_FOCUS_PAGES,
                    "prior_positions": PRIOR_POSITIONS_LIMIT},
         "warnings": warnings,
+        "layer": _layer_for_path(persona_file, wiki_root),
     }
 
 
@@ -1063,7 +1288,10 @@ def _cmd_search_candidates(query: str, division: str | None, source: str) -> int
     return 0
 
 
-def _cmd_resolve_team(name: str) -> int:
+def _load_factory_home_or_hint() -> str | None:
+    """The registered factory home, or None with the standard error JSON
+    already printed to stdout — shared by every subcommand that hard-
+    requires a resolvable factory home (resolve-team, resolve-persona)."""
     reg_path = resolve_wiki._default_registry_path()
     recorded = resolve_wiki.load_factory_home(reg_path)
     if not recorded or not resolve_wiki.is_factory_home(Path(recorded)):
@@ -1072,12 +1300,55 @@ def _cmd_resolve_team(name: str) -> int:
             "hint": ("factory home not registered or moved — run: "
                      "python3 resolve_wiki.py register-factory-home <path>"),
         }))
+        return None
+    return recorded
+
+
+def _cmd_resolve_team(name: str, wiki_root_str: str | None) -> int:
+    recorded = _load_factory_home_or_hint()
+    if recorded is None:
         return 2
 
+    wiki_root = Path(wiki_root_str) if wiki_root_str else None
     try:
-        result = resolve_team(Path(recorded), name)
+        result = resolve_team(Path(recorded), name, wiki_root)
     except TeamError as exc:
         print(json.dumps({"status": "error", "hint": str(exc)}))
+        return 2
+
+    print(json.dumps(result))
+    return 0
+
+
+def _cmd_resolve_persona(slug: str, wiki_root_str: str | None) -> int:
+    recorded = _load_factory_home_or_hint()
+    if recorded is None:
+        return 2
+
+    wiki_root = Path(wiki_root_str) if wiki_root_str else None
+    result = resolve_persona(Path(recorded), slug, wiki_root)
+    if result is None:
+        print(json.dumps({
+            "status": "error",
+            "hint": f"persona not found: {slug} (checked project layer and factory home)",
+        }))
+        return 2
+
+    print(json.dumps(result))
+    return 0
+
+
+def _cmd_ack_fork(copy_path_str: str) -> int:
+    copy_path = Path(copy_path_str)
+    if not copy_path.is_file():
+        print(json.dumps({"acked": False, "error": f"copy not found: {copy_path}"}))
+        return 2
+
+    home = _resolve_factory_home_best_effort()
+    try:
+        result = ack_fork(copy_path, home)
+    except AckForkError as exc:
+        print(json.dumps({"acked": False, "error": str(exc)}))
         return 2
 
     print(json.dumps(result))
@@ -1091,6 +1362,22 @@ def main(argv: list[str] | None = None) -> int:
     resolve_p = subparsers.add_parser(
         "resolve-team", help="Resolve a team's members against the factory home.")
     resolve_p.add_argument("name", help="Team id (teams/<name>.yaml stem).")
+    resolve_p.add_argument(
+        "--wiki-root", default=None,
+        help="Project root: members resolve <wiki-root>/personas/<agent>.md first.")
+
+    resolve_persona_p = subparsers.add_parser(
+        "resolve-persona",
+        help="Resolve a single persona by slug, project-over-factory precedence.")
+    resolve_persona_p.add_argument("slug", help="Persona slug (agent filename stem).")
+    resolve_persona_p.add_argument(
+        "--wiki-root", default=None,
+        help="Project root: resolves <wiki-root>/personas/<slug>.md first.")
+
+    ack_fork_p = subparsers.add_parser(
+        "ack-fork",
+        help="Acknowledge a project-copy persona's drift: rewrite its recorded base-hash.")
+    ack_fork_p.add_argument("copy_path", help="Path to the project-copy persona .md file.")
 
     validate_p = subparsers.add_parser(
         "validate-persona", help="Validate a persona file's frontmatter and anchors.")
@@ -1132,7 +1419,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.subcommand == "resolve-team":
-        return _cmd_resolve_team(args.name)
+        return _cmd_resolve_team(args.name, args.wiki_root)
+    if args.subcommand == "resolve-persona":
+        return _cmd_resolve_persona(args.slug, args.wiki_root)
+    if args.subcommand == "ack-fork":
+        return _cmd_ack_fork(args.copy_path)
     if args.subcommand == "validate-persona":
         return _cmd_validate_persona(args.path, args.project)
     if args.subcommand == "upgrade-persona":

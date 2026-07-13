@@ -1,6 +1,6 @@
 ---
 name: improve
-description: Review the factory home's pattern jot and propose persona edits as diffs, one per persona, never applying without explicit human approval; the fenced Immutable Anchors are guarded byte-unchanged before any write. Approved edits commit individually to the factory home's git repo — one commit per persona, so git revert is the rollback. Requires a registered factory home that is a git repo with a clean tree; STOPs otherwise. Use when the user says "/improve review", "review the pattern log", "improve the personas", or asks whether recurring feedback should change a persona.
+description: Review the factory home's pattern jot and propose persona edits as diffs, one per persona, never applying without explicit human approval; the fenced Immutable Anchors are guarded byte-unchanged before any write. Approved edits commit individually — base personas to the factory home's git repo, project copies to their own project's repo — so git revert is the rollback in whichever repo holds the file. Requires a registered factory home that is a git repo with a clean tree; STOPs otherwise. Use when the user says "/improve review", "review the pattern log", "improve the personas", or asks whether recurring feedback should change a persona.
 ---
 
 # improve skill
@@ -12,9 +12,10 @@ diff shown to the human before anything is written; nothing is applied
 without explicit per-diff approval. The fenced `## Immutable Anchors` section
 of a persona is never touched, and a deterministic guard
 (`team_ops.py anchors-unchanged`) verifies that byte-for-byte before any
-write lands. Approved edits are committed to the factory home's git repo one
-persona at a time — **the commit is the change log; `git revert` is the
-rollback.**
+write lands. Approved edits are committed one diff at a time — a base
+persona's edit to the factory home's git repo, a project copy's edit to its
+own project's repo — **the commit is the change log; `git revert` is the
+rollback.** That holds in whichever repo holds the edited file.
 
 The machinery (guard, validation) lives in `scripts/team_ops.py`; this skill
 is the judgment layer on top of it — reading the jot, grouping observations,
@@ -161,31 +162,41 @@ to edit; just display it for the user's own judgment):
    copies exist for this slug — routing is base-only, no question to ask.
 1. Read `<factory-home>/agents/<slug>.md` in full, and — if `list-copies`
    returned any copies — read each copy's file too (its `"path"` field), so
-   a "both" proposal (below) can be drafted against each side's real current
-   text rather than assuming a copy still reads like the base.
-2. **Determine the routing default** from provenance, before drafting:
-   - No copies → default **base**, no question to surface.
+   a multi-target proposal (below) can draft each target's diff against
+   that file's real current text rather than assuming a copy still reads
+   like the base.
+2. **Determine the routing** — the set of target files this persona's
+   proposal will carry diffs for — from provenance, before drafting:
+   - No copies → route to **base**; no question to surface.
    - Copies exist → compare this persona's Step 2 wiki sub-groups against
      the copies' `"wiki"` values:
      - Every observation in this persona's group carries a `"wiki"` value
        matching **exactly one** copy's `"wiki"` → default to **that copy**,
        and quote the provenance reason back to the user, the spec's own
        phrasing: *"this feedback came from sessions where the `<wiki>` copy
-       ran."*
-     - Observations split across the base (a "no wiki recorded" sub-group
-       present) and a copy, or across two different copies, or otherwise
-       don't cleanly point at one single copy → default to **both** (base
-       AND the implicated copy/copies) rather than silently guessing one.
+       ran."* This clean single-copy-provenance case is the **only** one
+       that gets a default.
      - No observation in the group carries any wiki provenance at all, but
        copies exist anyway → default **base**, but mention in the proposal
        that copies exist so the user can redirect.
+     - Observations span **multiple** wikis, or the routing is otherwise
+       N-way ambiguous (e.g. split between a "no wiki recorded" sub-group
+       and one or more copies) → **ASK before drafting**: present the
+       observation sub-groups and the candidate targets (each implicated
+       copy, plus base where eligible per the rule below) and let the user
+       pick the target set — never silently default a multi-target
+       routing.
+   - **Base joins the target set only when some observation lacks wiki
+     provenance** (the "no wiki recorded" sub-group is non-empty) **or the
+     user says so** — feedback whose provenance is purely copy-side never
+     silently implicates the base.
 3. Draft a **minimal** edit to a non-fenced section — normally
    `## Mutable Instructions`, but any section outside the
    `<!-- IMMUTABLE:BEGIN -->` / `<!-- IMMUTABLE:END -->` markers is fair
    game — that addresses the recurring feedback in that persona's
-   observation group, against each file the routing default (or the user's
-   override) targets. "Minimal" means: the smallest change that actually
-   resolves the pattern, not a rewrite of the file. **Never** draft a change
+   observation group, against each file in the routed target set.
+   "Minimal" means: the smallest change that actually resolves the
+   pattern, not a rewrite of the file. **Never** draft a change
    inside the fenced Immutable Anchors block — that section cannot change,
    full stop. **Never** invent feedback that isn't present in an actual jot
    observation; every clause in the diff must trace back to something a
@@ -199,7 +210,7 @@ to edit; just display it for the user's own judgment):
    ```
    ### Proposal: <persona-name> (<slug>)
 
-   Routing: <base | the "<wiki>" copy | both — base and the "<wiki>" copy> (default from jot provenance; say which you'd rather target to change it)
+   Routing: <the target set — base, the "<wiki>" copy, or several targets listed out> (defaulted from jot provenance, or as you chose when asked; say which target(s) you'd rather have to change it)
 
    Triggering observation(s):
    > "<jot observation text, verbatim>"
@@ -212,10 +223,12 @@ to edit; just display it for the user's own judgment):
    +<added line>
    ```
 
-   **"Both" is two separately drafted diffs, never one patch applied
-   twice** — the copy may have diverged from the base since it forked, so
-   its diff is drafted fresh against ITS OWN current text, not mechanically
-   re-applied from the base diff. If the copy's equivalent section has
+   **Per-target diffs — one separately drafted diff PER routed target,
+   never one patch ported.** When the target set holds more than one file
+   (base plus one or more copies, or several copies), each target's diff
+   is drafted fresh against ITS OWN current text — a copy may have
+   diverged from the base since it forked, so a base diff is never
+   mechanically re-applied to a copy. If a copy's equivalent section has
    diverged so far that the base diff doesn't conceptually apply to it,
    draft what actually fits the copy's current text and label that diff
    **"adaptation, not a port"** in the gate presentation — never force-port
@@ -223,9 +236,10 @@ to edit; just display it for the user's own judgment):
 
 **One proposal per persona per run** — if a persona's group has three
 observations, they inform a single combined diff, not three separate
-proposals. The one documented exception is "both" routing: that single
-persona's proposal carries two diffs (one per target file), each still
-gated independently in Step 4 ("the gate is per-diff, not per-run").
+proposals. The one documented exception is multi-target routing: that
+single persona's proposal carries one diff per routed target file, each
+still gated independently in Step 4 ("the gate is per-diff, not
+per-run").
 
 ## Step 4 — Human gate
 
@@ -253,15 +267,16 @@ stamp it because the guard will "catch it" downstream. It won't.
 ## Step 5 — Apply, verify, commit (approved proposals only)
 
 Each approved diff from Step 3 targets exactly one file — the base persona
-(`<factory-home>/agents/<slug>.md`) or one project copy (`<copy-path>`, from
-that persona's Step 3 `list-copies` result) — call it `<target-file>` below.
-Under "both" routing there are two approved diffs for the same persona, so
-this whole chain runs **twice, independently**, once per target file.
-Wherever steps 1, 2, and 4 below reference `<factory-home>/agents/<slug>.md`,
-that is `<target-file>` — the scratch-write, guard, and atomic-write
-mechanics are identical regardless of which file is being edited; only
-validation (step 3) and the commit destination (step 5) differ by layer,
-both called out explicitly where they occur.
+(`<factory-home>/agents/<slug>.md`) or one project copy (its `list-copies`
+`"path"`) — call it `<target-file>` below. Under multi-target routing there
+is one approved diff per routed target for the same persona, so this whole
+chain runs **once per target file, independently**. The command blocks in
+steps 2 and 4 take `<target-file>` directly; anywhere else a step still
+spells out `<factory-home>/agents/<slug>.md` (e.g. step 2's lazy-upgrade
+recovery branch), read it as `<target-file>` — the scratch-write, guard,
+and atomic-write mechanics are identical regardless of which file is being
+edited; only validation (step 3) and the commit destination (step 5)
+differ by layer, both called out explicitly where they occur.
 
 For each **approved** proposal, in order:
 
@@ -271,7 +286,7 @@ For each **approved** proposal, in order:
 2. Run the deterministic guard against the original and the scratch copy:
 
    ```bash
-   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" anchors-unchanged "<factory-home>/agents/<slug>.md" "<scratch-path>"
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" anchors-unchanged "<target-file>" "<scratch-path>"
    ```
 
    Exit codes are this skill's branch points:
@@ -342,7 +357,7 @@ For each **approved** proposal, in order:
    atomically (tmp+rename, mirroring `/team recruit`'s write pattern):
 
    ```bash
-   cp "<scratch-path>" "<factory-home>/agents/<slug>.md.tmp" && mv "<factory-home>/agents/<slug>.md.tmp" "<factory-home>/agents/<slug>.md"
+   cp "<scratch-path>" "<target-file>.tmp" && mv "<target-file>.tmp" "<target-file>"
    ```
 5. Commit **this diff's edit alone** — one commit per approved diff, so a
    single `git revert` can undo exactly one persona's (or one copy's) change
@@ -390,8 +405,9 @@ For each **approved** proposal, in order:
        Record the resulting commit SHA
        (`git -C "<project-root>" rev-parse HEAD`) for Step 6.
 
-   **After an approved edit that targeted the base ONLY** (routing was
-   `base`, not `both`), when this persona's Step 3 `list-copies` result was
+   **After an approved edit that targeted the base ONLY** (the routed
+   target set was the base alone, with no copy diff alongside it), when
+   this persona's Step 3 `list-copies` result was
    non-empty: remind the user, once, that the existing project copies did
    **not** receive this edit — they will surface a `drift_notice` (the same
    spawn-time backstop `/team` and `/staff` already show) the next time a
@@ -402,8 +418,8 @@ For each **approved** proposal, in order:
 ## Step 6 — Bookkeeping
 
 End the run's output with, **every tally below split by layer** (base vs.
-project-copy) — a "both"-routed persona contributes one count to each layer,
-since it drafted two independent diffs:
+project-copy) — a multi-target persona contributes one count per routed
+target's layer, since each target got its own independently drafted diff:
 
 - **Proposals made** — count from Step 3, base diffs / project-copy diffs.
 - **Approved** / **Rejected** / **Blocked by guard** (anchors-unchanged

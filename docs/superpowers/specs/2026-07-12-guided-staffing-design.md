@@ -44,12 +44,26 @@ Each checklist item is then resolved in order of preference: **(1) inferred and 
 
 Answers are recorded to `<factory-home>/instructions/staffing-intake.md` (create-or-update; one section per questionnaire version) — the durable record that later re-staffing, `/team recruit`, and `/improve` can read.
 
+## Staffing doctrine (embedded in the skill — the basis for questions and composition)
+
+The skill carries its own theory of what a good team is; the model applies it rather than improvising from general knowledge. Every slate proposal must justify each member against these principles, and the intake questions exist to gather exactly the inputs the doctrine needs:
+
+1. **Cover the decision surface, not the org chart.** A team is good if every hard decision the user faces (intake item 3) has at least one lens that will interrogate it. Staff to decisions, not to job titles.
+2. **Complement the human.** The user's own expertise (item 4) is already on the team — never duplicate it; staff the declared and inferred gaps.
+3. **Tension by design.** Include at least one member whose job is to say no (reality-checker / skeptic archetype). A slate where every lens would agree is an echo chamber — split verdicts are a feature (they surface the real cruxes to the user, who holds the tie-break).
+4. **A domain conscience.** One member owns keeping the product honest about what its domain actually allows — regulations, real-world constraints, how the served population actually behaves (items 1–2). In field use this archetype changed more decisions than any other.
+5. **Sharp boundaries.** Every persona declares deep expertise, working knowledge, and explicit "defers on" — overlapping ownership produces mush. Composition must check that no two members claim the same deep lane and that every "defers on" points at someone actually on the team (or at the user).
+6. **Small active bench, on-demand extras.** Default 3–5 members spawned per session; specialists (copy QA, privacy, visual) join as `invocation: on-demand`. Context budgets are real — every member must earn their dispatch: if you cannot name a decision a member would change, cut them.
+7. **Diversity of evidence style.** Mix at least two of: numbers-first (economics/metrics lens), user-first (behavior/experience lens), and precedent-first (what happened when others tried this). Single-style teams miss whole failure classes.
+
+The intake checklist maps onto the doctrine (1–2 → domain conscience; 3 → decision coverage; 4 → complement; 7 → bench size), which is what grounds the model when it composes context-specific questions: it knows *why* it is asking.
+
 ## Flow (skill outline)
 
 1. **Preflight** — resolve factory home (STOP with hint if absent, like `/team`); detect existing roster/teams (staffing an existing org = expansion mode: same flow, slate seeded with current members).
 2. **Context fetch + interview** — scan project/wiki/factory-home context, draft answers, then run the intake checklist context-first (confirm-or-correct before open-ended); write the intake file with inferred-vs-stated provenance.
 3. **Resource triage** (if Q6 provided) — read the docs; present the three-destination table; on approval write guidelines/shape-notes, and queue wiki-ingest offers (never auto-ingest).
-4. **Composition proposal** — recommended slate: role, why (tied to intake answers), source (starter / agency-agents / references), what each member covers. User edits the slate before anything is fetched.
+4. **Composition proposal** — recommended slate: role, why (each line names the doctrine principle it satisfies and the intake answer it ties to), source (starter / agency-agents / references), active vs on-demand. Includes the boundary check (no duplicated deep lanes; defers-on targets exist). User edits the slate before anything is fetched.
 5. **Source & adapt** — starter/reference candidates copied; agency-agents selections fetched from GitHub (or the local mirror); each shaped into factory format: citation anchor + fenced immutables preserved, `description:` ≤600 in "Use when…" form, `domain:` tags from the intake, expertise sections informed by triaged domain material.
 6. **Validate + human gate** — `validate-persona` on every draft; denylist confirm-gates per the relaxed rule; every file presented as a diff; one approval per persona; atomic writes; refuse-to-overwrite existing slugs.
 7. **Assemble** — `teams/<name>.yaml` (template shape), `notes:` linking the working-guidelines file and the intake; final output: the roster table + "run `/team <name>` to hold your first session."

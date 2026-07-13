@@ -8,7 +8,7 @@ A new user who installs llm-wiki gets working machinery and an empty organizatio
 
 ## Goal
 
-One guided session takes a user from an empty factory home to: a staffed, validated team; a working-guidelines file; and a durable intake record — sourcing candidates from a bundled starter roster, a bundled index of the public `agency-agents` catalog (~500 personas, MIT), and any local reference pools.
+One guided session takes a user from an empty factory home to: a staffed, validated team; a working-guidelines file; and a durable intake record — sourcing candidates from a bundled starter roster, the public `agency-agents` catalog (277 personas, MIT), and any local reference pools.
 
 ## Design decisions (settled)
 
@@ -53,7 +53,7 @@ The skill carries its own theory of what a good team is; the model applies it ra
 3. **Tension by design.** Include at least one member whose job is to say no (reality-checker / skeptic archetype). A slate where every lens would agree is an echo chamber — split verdicts are a feature (they surface the real cruxes to the user, who holds the tie-break).
 4. **A domain conscience.** One member owns keeping the product honest about what its domain actually allows — regulations, real-world constraints, how the served population actually behaves (items 1–2). In field use this archetype changed more decisions than any other.
 5. **Sharp boundaries, but defer-with-a-view.** Every persona declares deep expertise, working knowledge, and explicit "defers on" — overlapping ownership produces mush. Composition must check that no two members claim the same deep lane and that every "defers on" points at someone actually on the team (or at the user). Deferring is never silence: a member who defers still states their recommendation from their own lens ("I defer to <owner> on this; from where I sit it looks like <view>, because <reason>") — the owning lens decides, but the panel never loses a viewpoint to a boundary, and stalemates resolve through the owner rather than through omission. Persona adaptation (flow step 5) bakes this into each hire's instructions.
-6. **Small active bench, on-demand extras.** Default 3–5 members spawned per session; specialists (copy QA, privacy, visual) join as `invocation: on-demand`. Context budgets are real — every member must earn their dispatch: if you cannot name a decision a member would change, cut them.
+6. **Small active bench, on-demand extras.** Active bench 3–5 members per session (full roster up to 9, the rest `invocation: on-demand` — matching intake item 7's focused/full-bench choice); specialists (copy QA, privacy, visual) join as `invocation: on-demand`. Context budgets are real — every member must earn their dispatch: if you cannot name a decision a member would change, cut them.
 7. **Diversity of evidence style.** Mix at least two of: numbers-first (economics/metrics lens), user-first (behavior/experience lens), and precedent-first (what happened when others tried this). Single-style teams miss whole failure classes.
 
 The intake checklist maps onto the doctrine (1–2 → domain conscience; 3 → decision coverage; 4 → complement; 7 → bench size), which is what grounds the model when it composes context-specific questions: it knows *why* it is asking.
@@ -64,9 +64,9 @@ The intake checklist maps onto the doctrine (1–2 → domain conscience; 3 → 
 2. **Context fetch + interview** — scan project/wiki/factory-home context, draft answers, then run the intake checklist context-first (confirm-or-correct before open-ended); write the intake file with inferred-vs-stated provenance.
 3. **Resource triage** (if Q6 provided) — read the docs; present the three-destination table; on approval write guidelines/shape-notes, and queue wiki-ingest offers (never auto-ingest).
 4. **Composition proposal** — recommended slate: role, why (each line names the doctrine principle it satisfies and the intake answer it ties to), source (starter / agency-agents / references), active vs on-demand. Includes the boundary check (no duplicated deep lanes; defers-on targets exist). User edits the slate before anything is fetched.
-5. **Source & adapt** — starter/reference candidates copied; agency-agents selections fetched from GitHub (or the local mirror); each shaped into factory format: citation anchor + fenced immutables preserved, `description:` ≤600 in "Use when…" form, `domain:` tags from the intake, expertise sections informed by triaged domain material.
+5. **Source & adapt** — starter/reference candidates copied; agency-agents selections fetched from GitHub (or the local mirror); each written to `<factory-home>/agents/<slug>.md` under recruit's refuse-to-overwrite + atomic-write rules, shaped into factory format: citation anchor + fenced immutables preserved, `description:` ≤600 in "Use when…" form, `domain:` tags from the intake, expertise sections informed by triaged domain material.
 6. **Validate + human gate** — `validate-persona` on every draft; denylist confirm-gates per the relaxed rule; every file presented as a diff; one approval per persona; atomic writes; refuse-to-overwrite existing slugs.
-7. **Assemble** — `teams/<name>.yaml` (template shape), `notes:` linking the working-guidelines file and the intake; final output: the roster table + "run `/team <name>` to hold your first session."
+7. **Assemble** — `teams/<name>.yaml` per the template with required fields sourced explicitly (`id`/`name` from the team name, `purpose` from intake item 1, `project` from the resolved wiki's project root); the team template gains a documented optional `notes:` field (the parser already tolerates unknown scalars) linking the working-guidelines file and the intake; final output: the roster table + "run `/team <name>` to hold your first session."
 
 ## Machinery (deterministic, tested)
 
@@ -76,10 +76,14 @@ The intake checklist maps onto the doctrine (1–2 → domain conscience; 3 → 
 
 ## Testing
 
-- Unit: search-candidates ranking + source filters; scope-bound validation semantics; index schema guard (shipped index parses, ≥400 entries, required keys).
+- Unit: search-candidates ranking + source filters; scope-bound validation semantics; catalog guard (shipped catalog parses, ≥250 entries, required keys; `division` derived from each agent's top-level directory — the files themselves carry no division frontmatter).
 - Starter roster: each of the nine passes `validate-persona` clean out of the box (mirrors the template test).
 - Integration: fixture factory home from empty → intake file → candidates searched → one starter + one fixture-"fetched" persona adapted → validated → team YAML parses via `parse_team_yaml`.
 - Acceptance: blind-adopter run — a fresh agent staffs a team for an invented product following only shipped docs; the resulting team must pass `resolve-team` and `assemble-context`.
+
+## Companion plan: starter-roster authoring
+
+The nine starter personas are content, not machinery — authoring them (genericized from the maintainer's private roster) is its own implementation plan with its own review: per-persona leak-sweep, `validate-persona` clean, and a blind cold-read ("does this archetype read as truly generic?"). The machinery plan treats `plugin/assets/starter-roster/` as an interface (any N validating personas), so the two plans land independently.
 
 ## Out of scope (v1)
 

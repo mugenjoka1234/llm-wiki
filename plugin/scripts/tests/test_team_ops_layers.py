@@ -18,6 +18,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from scripts import team_ops
 from scripts.tests.team_test_utils import (
@@ -691,6 +692,272 @@ class TestCliAckFork(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertIn("register-factory-home", payload["hint"])
         self.assertNotIn("base persona not found", json.dumps(payload))
+
+
+# --- list-copies: routing lookup across registered wikis --------------------
+
+def _make_registered_wiki(root: Path, name: str) -> Path:
+    """A minimal `is_wiki`-passing wiki directory: `<root>/<name>/CLAUDE.md`
+    with the `## Purpose` marker section, no `personas/` dir yet (callers
+    add copies with `make_project_copy`)."""
+    wiki = root / name
+    wiki.mkdir()
+    (wiki / "CLAUDE.md").write_text(f"# {name}\n\n## Purpose\n\nTest wiki.\n")
+    return wiki
+
+
+class TestListCopies(unittest.TestCase):
+    """`list_copies(slug, home)`: scans every registered (`is_wiki`-passing)
+    wiki's `personas/*.md` for a matching `base-slug`, a deterministic
+    routing lookup — distinct from `resolve_team`/`resolve_persona`'s
+    single-project precedence resolution, this fans OUT across every
+    registered wiki at once."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.root = Path(self.tmpdir)
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir)
+
+    def _env(self):
+        return mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_DATA": str(self.root)})
+
+    def test_finds_copies_across_two_wikis(self):
+        home = make_factory_home(self.root, personas=())
+        base_text = PERSONA_BODY.format(name="Wren", role="Domain Lead")
+        (home / "agents" / "wren.md").write_text(base_text)
+        wiki_a = _make_registered_wiki(self.root, "wiki-a")
+        wiki_b = _make_registered_wiki(self.root, "wiki-b")
+        copy_a = make_project_copy(wiki_a, "wren", PERSONA_PROJECT_COPY.format(
+            name="Wren", role="Domain Lead", description="Use when testing a.",
+            base_slug="wren", forked="2026-06-01", base_hash=sha256_text(base_text),
+            project="wiki-a"))
+        copy_b = make_project_copy(wiki_b, "wren", PERSONA_PROJECT_COPY.format(
+            name="Wren", role="Domain Lead", description="Use when testing b.",
+            base_slug="wren", forked="2026-06-02", base_hash=sha256_text(base_text),
+            project="wiki-b"))
+        _write_factory_home_registry(self.root, home, extra_lines=[
+            f"{wiki_a.resolve()}|wiki-a|2026-01-01|2026-01-01",
+            f"{wiki_b.resolve()}|wiki-b|2026-01-01|2026-01-01",
+        ])
+
+        with self._env():
+            result = team_ops.list_copies("wren", home)
+
+        self.assertEqual(len(result["copies"]), 2)
+        self.assertEqual({c["path"] for c in result["copies"]},
+                          {str(copy_a.resolve()), str(copy_b.resolve())})
+        self.assertNotIn("skipped", result)
+        for c in result["copies"]:
+            self.assertEqual(c["drifted"], False)
+            self.assertIn(c["forked"], ("2026-06-01", "2026-06-02"))
+
+    def test_skips_non_matching_base_slug(self):
+        home = make_factory_home(self.root, personas=())
+        (home / "agents" / "wren.md").write_text(
+            PERSONA_BODY.format(name="Wren", role="Domain Lead"))
+        wiki = _make_registered_wiki(self.root, "wiki-a")
+        make_project_copy(wiki, "sage", PERSONA_PROJECT_COPY.format(
+            name="Sage", role="Other", description="Use when testing.",
+            base_slug="sage", forked="2026-06-01", base_hash=sha256_text("x"),
+            project="wiki-a"))
+        _write_factory_home_registry(self.root, home, extra_lines=[
+            f"{wiki.resolve()}|wiki-a|2026-01-01|2026-01-01"])
+
+        with self._env():
+            result = team_ops.list_copies("wren", home)
+
+        self.assertEqual(result, {"copies": []})
+
+    def test_empty_registry_returns_empty_copies(self):
+        home = make_factory_home(self.root, personas=())
+        # No registry.txt written at all.
+        with self._env():
+            result = team_ops.list_copies("wren", home)
+        self.assertEqual(result, {"copies": []})
+
+    def test_drifted_true_on_hash_mismatch(self):
+        home = make_factory_home(self.root, personas=())
+        base_text = PERSONA_BODY.format(name="Wren", role="Domain Lead")
+        (home / "agents" / "wren.md").write_text(base_text)
+        wiki = _make_registered_wiki(self.root, "wiki-a")
+        make_project_copy(wiki, "wren", PERSONA_PROJECT_COPY.format(
+            name="Wren", role="Domain Lead", description="Use when testing.",
+            base_slug="wren", forked="2026-06-01",
+            base_hash=sha256_text("stale — not the real base"),
+            project="wiki-a"))
+        _write_factory_home_registry(self.root, home, extra_lines=[
+            f"{wiki.resolve()}|wiki-a|2026-01-01|2026-01-01"])
+
+        with self._env():
+            result = team_ops.list_copies("wren", home)
+
+        self.assertEqual(result["copies"][0]["drifted"], True)
+
+    def test_drifted_false_on_hash_match(self):
+        home = make_factory_home(self.root, personas=())
+        base_text = PERSONA_BODY.format(name="Wren", role="Domain Lead")
+        (home / "agents" / "wren.md").write_text(base_text)
+        wiki = _make_registered_wiki(self.root, "wiki-a")
+        make_project_copy(wiki, "wren", PERSONA_PROJECT_COPY.format(
+            name="Wren", role="Domain Lead", description="Use when testing.",
+            base_slug="wren", forked="2026-06-01", base_hash=sha256_text(base_text),
+            project="wiki-a"))
+        _write_factory_home_registry(self.root, home, extra_lines=[
+            f"{wiki.resolve()}|wiki-a|2026-01-01|2026-01-01"])
+
+        with self._env():
+            result = team_ops.list_copies("wren", home)
+
+        self.assertEqual(result["copies"][0]["drifted"], False)
+
+    def test_drifted_none_when_base_hash_missing(self):
+        home = make_factory_home(self.root, personas=())
+        (home / "agents" / "wren.md").write_text(
+            PERSONA_BODY.format(name="Wren", role="Domain Lead"))
+        wiki = _make_registered_wiki(self.root, "wiki-a")
+        # A copy carrying base-slug but no base-hash/forked frontmatter at all.
+        no_hash_copy = (
+            "---\nname: Wren\nrole: Domain Lead\n"
+            "description: Use when testing missing hash.\n"
+            "base-slug: wren\nversion: v1.0\n---\n\n"
+            "# Wren — Domain Lead\n\n## Identity\nCopy with no base-hash.\n\n"
+            "## Immutable Anchors (cannot change)\n\n"
+            "<!-- IMMUTABLE:BEGIN -->\n- Never fabricates data\n"
+            "<!-- IMMUTABLE:END -->\n\n## Mutable Instructions (can evolve)\n\n"
+            "- Output format\n")
+        make_project_copy(wiki, "wren", no_hash_copy)
+        _write_factory_home_registry(self.root, home, extra_lines=[
+            f"{wiki.resolve()}|wiki-a|2026-01-01|2026-01-01"])
+
+        with self._env():
+            result = team_ops.list_copies("wren", home)
+
+        self.assertIsNone(result["copies"][0]["drifted"])
+        self.assertIsNone(result["copies"][0]["forked"])
+
+    def test_drifted_none_when_base_file_missing(self):
+        home = make_factory_home(self.root, personas=())  # no wren.md in agents/
+        wiki = _make_registered_wiki(self.root, "wiki-a")
+        make_project_copy(wiki, "wren", PERSONA_PROJECT_COPY.format(
+            name="Wren", role="Domain Lead", description="Use when testing.",
+            base_slug="wren", forked="2026-06-01", base_hash=sha256_text("anything"),
+            project="wiki-a"))
+        _write_factory_home_registry(self.root, home, extra_lines=[
+            f"{wiki.resolve()}|wiki-a|2026-01-01|2026-01-01"])
+
+        with self._env():
+            result = team_ops.list_copies("wren", home)
+
+        self.assertIsNone(result["copies"][0]["drifted"])
+
+    def test_unreadable_persona_file_skipped_and_counted(self):
+        home = make_factory_home(self.root, personas=())
+        base_text = PERSONA_BODY.format(name="Wren", role="Domain Lead")
+        (home / "agents" / "wren.md").write_text(base_text)
+        wiki = _make_registered_wiki(self.root, "wiki-a")
+        good_copy = make_project_copy(wiki, "wren", PERSONA_PROJECT_COPY.format(
+            name="Wren", role="Domain Lead", description="Use when testing good.",
+            base_slug="wren", forked="2026-06-01", base_hash=sha256_text(base_text),
+            project="wiki-a"))
+        bad_copy = make_project_copy(wiki, "other", PERSONA_PROJECT_COPY.format(
+            name="Other", role="X", description="Use when testing bad.",
+            base_slug="wren", forked="2026-06-02", base_hash=sha256_text("y"),
+            project="wiki-a"))
+        _make_unreadable(self, bad_copy)
+        _write_factory_home_registry(self.root, home, extra_lines=[
+            f"{wiki.resolve()}|wiki-a|2026-01-01|2026-01-01"])
+
+        with self._env():
+            result = team_ops.list_copies("wren", home)
+
+        self.assertEqual({c["path"] for c in result["copies"]},
+                          {str(good_copy.resolve())})
+        self.assertEqual(result["skipped"], 1)
+
+    def test_non_wiki_registry_entry_excluded(self):
+        home = make_factory_home(self.root, personas=())
+        not_a_wiki = self.root / "not-a-wiki"
+        not_a_wiki.mkdir()
+        make_project_copy(not_a_wiki, "wren", PERSONA_PROJECT_COPY.format(
+            name="Wren", role="Domain Lead", description="Use when testing.",
+            base_slug="wren", forked="2026-06-01", base_hash=sha256_text("z"),
+            project="not-a-wiki"))
+        _write_factory_home_registry(self.root, home, extra_lines=[
+            f"{not_a_wiki.resolve()}|not-a-wiki|2026-01-01|2026-01-01"])
+
+        with self._env():
+            result = team_ops.list_copies("wren", home)
+
+        self.assertEqual(result, {"copies": []})
+
+    def test_registered_wiki_path_gone_excluded(self):
+        home = make_factory_home(self.root, personas=())
+        gone = self.root / "gone-wiki"  # never created on disk
+        _write_factory_home_registry(self.root, home, extra_lines=[
+            f"{gone}|gone|2026-01-01|2026-01-01"])
+
+        with self._env():
+            result = team_ops.list_copies("wren", home)
+
+        self.assertEqual(result, {"copies": []})
+
+
+class TestCliListCopies(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.root = Path(self.tmpdir)
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir)
+
+    def test_cli_finds_copy_exit_0(self):
+        home = make_factory_home(self.root, personas=())
+        base_text = PERSONA_BODY.format(name="Wren", role="Domain Lead")
+        (home / "agents" / "wren.md").write_text(base_text)
+        wiki = _make_registered_wiki(self.root, "wiki-a")
+        make_project_copy(wiki, "wren", PERSONA_PROJECT_COPY.format(
+            name="Wren", role="Domain Lead", description="Use when testing.",
+            base_slug="wren", forked="2026-06-01", base_hash=sha256_text(base_text),
+            project="wiki-a"))
+        _write_factory_home_registry(self.root, home, extra_lines=[
+            f"{wiki.resolve()}|wiki-a|2026-01-01|2026-01-01"])
+        env = _env_with_registry(self.root)
+
+        result = _run("list-copies", "wren", env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(len(payload["copies"]), 1)
+        self.assertEqual(payload["copies"][0]["drifted"], False)
+
+    def test_cli_no_registry_exit_0_empty(self):
+        env = _env_with_registry(self.root)  # no registry.txt at all
+
+        result = _run("list-copies", "wren", env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"copies": []})
+
+    def test_cli_no_factory_home_registered_still_exit_0(self):
+        """No factory home is NOT an error for list-copies: unlike
+        resolve-team/ack-fork, this scans registered wikis, not the factory
+        home — drift just degrades to null (fields unavailable)."""
+        wiki = _make_registered_wiki(self.root, "wiki-a")
+        make_project_copy(wiki, "wren", PERSONA_PROJECT_COPY.format(
+            name="Wren", role="Domain Lead", description="Use when testing.",
+            base_slug="wren", forked="2026-06-01", base_hash=sha256_text("anything"),
+            project="wiki-a"))
+        reg = self.root / "registry.txt"
+        reg.write_text(f"{wiki.resolve()}|wiki-a|2026-01-01|2026-01-01\n")
+        env = _env_with_registry(self.root)
+
+        result = _run("list-copies", "wren", env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(len(payload["copies"]), 1)
+        self.assertIsNone(payload["copies"][0]["drifted"])
 
 
 if __name__ == "__main__":

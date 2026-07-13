@@ -79,6 +79,18 @@ Usage:
       when unchanged (ok), exit 1 when changed/malformed (not ok), exit 2
       when either path is unreadable. These exit codes are the /improve
       skill's branch points; keep them exact.
+  team_ops.py list-copies <slug>
+      Fan-out routing lookup (distinct from resolve-team/resolve-persona's
+      single-project precedence): scan EVERY registered wiki (registry
+      entries that `is_wiki`) for `<wiki>/personas/*.md` files whose
+      `base-slug` frontmatter equals <slug>. JSON {"copies": [{"wiki":
+      <registered path>, "path": <resolved copy path>, "forked": <date or
+      null>, "drifted": <bool or null>}, ...]} on stdout (empty list is
+      valid — no error). "drifted" is a hash comparison (True/False) when
+      the copy's base-hash AND the factory home's base file are both
+      available, else null. An unreadable persona file is SKIPPED, never a
+      crash, optionally counted in a "skipped" int (present only when > 0).
+      Exit 0 always; read-only, never touches file contents.
   team_ops.py search-candidates --query "<terms>" [--division D]
                                  [--source starter|catalog|references|all]
       Rank staffing candidates across the starter roster
@@ -355,6 +367,102 @@ def resolve_persona(home: Path, slug: str, wiki_root: Path | None = None) -> dic
         notice = _drift_notice(persona_file, home)
         if notice:
             result["drift_notice"] = notice
+    return result
+
+
+# --- list-copies: routing lookup across registered wikis --------------------
+#
+# `list_copies` is a deterministic FAN-OUT lookup, distinct from
+# `resolve_team`/`resolve_persona`'s single-project precedence resolution:
+# given a base persona's slug, find EVERY project-copy across EVERY
+# registered wiki that forked from it — the routing lookup /improve uses to
+# offer "propose to base / this copy / both" when editing a persona that has
+# copies elsewhere. Never touches file contents (read-only), never raises.
+
+def _copy_drifted(fm: dict, home: Path) -> bool | None:
+    """Tri-state drift comparison for one project-copy's already-parsed
+    frontmatter dict: True/False (hash comparison) when BOTH a recorded
+    `base-hash` AND `<home>/agents/<base-slug>.md` are available, else None
+    ("fields unavailable" is reported as missing DATA, not as "not
+    drifted"). Mirrors `_drift_notice`'s same AND-gated availability check
+    (base-hash present AND base file exists) but returns a bool instead of
+    a notice string — list-copies reports drift as structured data for a
+    caller to branch on, not prose. Any OSError reading the base file's
+    bytes (e.g. permission-denied) also degrades to None, never a crash."""
+    base_slug = fm.get("base-slug")
+    base_hash = fm.get("base-hash")
+    if not base_slug or not base_hash:
+        return None
+    base_file = home / "agents" / f"{base_slug}.md"
+    if not base_file.is_file():
+        return None
+    try:
+        current_hash = hashlib.sha256(base_file.read_bytes()).hexdigest()
+    except OSError:
+        return None
+    return current_hash != base_hash
+
+
+def list_copies(slug: str, home: Path) -> dict:
+    """Scan every registered wiki for project-copy personas whose `base-
+    slug` frontmatter matches `slug`.
+
+    Reads the registry via `resolve_wiki.load_registry` (the established
+    `_default_registry_path()` pattern shared with `build_denylist`) and
+    keeps only entries that `is_wiki` — a registry entry whose path has
+    moved or been deleted simply fails `is_wiki` (which itself never
+    raises: see its own PermissionError/OSError guard) and is silently
+    excluded, the same posture `_search_pool` takes toward a missing pool
+    root. For each surviving wiki, globs `<wiki>/personas/*.md` (a wiki
+    with no `personas/` dir contributes nothing, not an error) and reads
+    each file's frontmatter via `_frontmatter`; a copy whose `base-slug`
+    doesn't equal `slug` is skipped silently (not an error, not counted).
+
+    Robustness (Task 4's lesson: one bad file must never crash a whole
+    scan): an UNREADABLE persona file — `_frontmatter`'s `path.read_text()`
+    raises OSError, e.g. permission-denied — is SKIPPED, counted in the
+    returned `"skipped"` int (included in the result only when > 0; this is
+    distinct from the silently-excluded gone/non-wiki registry entries
+    above, which are ordinary filtering, not failures).
+
+    Each surviving copy contributes {"wiki": <registry entry's path string,
+    verbatim>, "path": <resolved copy path str>, "forked": <fm.get
+    ("forked") or None>, "drifted": <bool | None, via `_copy_drifted`>}.
+
+    Returns {"copies": [...]} (empty list is a valid, non-error result)
+    [+ "skipped": N when > 0]. Exit 0 always at the CLI layer — this
+    function never raises and never writes anything.
+    """
+    reg_path = resolve_wiki._default_registry_path()
+    entries = resolve_wiki.load_registry(reg_path)
+
+    copies: list[dict] = []
+    skipped = 0
+    for entry in entries:
+        wiki_path = Path(entry["path"])
+        if not resolve_wiki.is_wiki(wiki_path):
+            continue
+        personas_dir = wiki_path / "personas"
+        if not personas_dir.is_dir():
+            continue
+        for persona_file in sorted(personas_dir.glob("*.md")):
+            try:
+                fm = _frontmatter(persona_file)
+            except OSError:
+                skipped += 1
+                continue
+            if fm.get("base-slug") != slug:
+                continue
+            copies.append({
+                "wiki": entry["path"],
+                "path": str(persona_file.resolve()),
+                "forked": fm.get("forked") or None,
+                "drifted": _copy_drifted(fm, home),
+            })
+
+    result: dict = {"copies": copies}
+    if skipped:
+        result["skipped"] = skipped
     return result
 
 
@@ -1409,6 +1517,13 @@ def _cmd_ack_fork(copy_path_str: str) -> int:
     return 0
 
 
+def _cmd_list_copies(slug: str) -> int:
+    home = _resolve_factory_home_best_effort()
+    result = list_copies(slug, home)
+    print(json.dumps(result))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Team operations for AI Factory teams.")
     subparsers = parser.add_subparsers(dest="subcommand")
@@ -1432,6 +1547,11 @@ def main(argv: list[str] | None = None) -> int:
         "ack-fork",
         help="Acknowledge a project-copy persona's drift: rewrite its recorded base-hash.")
     ack_fork_p.add_argument("copy_path", help="Path to the project-copy persona .md file.")
+
+    list_copies_p = subparsers.add_parser(
+        "list-copies",
+        help="Scan every registered wiki for project-copy personas forked from <slug>.")
+    list_copies_p.add_argument("slug", help="Base persona slug (agents/<slug>.md).")
 
     validate_p = subparsers.add_parser(
         "validate-persona", help="Validate a persona file's frontmatter and anchors.")
@@ -1478,6 +1598,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_resolve_persona(args.slug, args.wiki_root)
     if args.subcommand == "ack-fork":
         return _cmd_ack_fork(args.copy_path)
+    if args.subcommand == "list-copies":
+        return _cmd_list_copies(args.slug)
     if args.subcommand == "validate-persona":
         return _cmd_validate_persona(args.path, args.project)
     if args.subcommand == "upgrade-persona":

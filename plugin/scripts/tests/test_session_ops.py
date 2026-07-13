@@ -205,6 +205,31 @@ class TestJotAppend(unittest.TestCase):
         row = json.loads(self.jot.read_text().splitlines()[0])
         self.assertNotIn("personas", row)
 
+    def test_wiki_key_written_when_given(self):
+        out = session_ops.jot_append(
+            self.home, "2026-07-11-demo", "2026-07-11",
+            ["observation about acme-corp"], wiki="/path/to/acme-corp")
+        self.assertEqual(out, {"appended": 1, "skipped": False})
+        row = json.loads(self.jot.read_text().splitlines()[0])
+        self.assertEqual(row["wiki"], "/path/to/acme-corp")
+
+    def test_wiki_key_omitted_when_absent(self):
+        out = session_ops.jot_append(
+            self.home, "2026-07-11-demo", "2026-07-11", ["general observation"])
+        self.assertEqual(out, {"appended": 1, "skipped": False})
+        row = json.loads(self.jot.read_text().splitlines()[0])
+        self.assertNotIn("wiki", row)
+
+    def test_wiki_and_personas_both_written_when_given(self):
+        out = session_ops.jot_append(
+            self.home, "2026-07-11-demo", "2026-07-11",
+            ["observation about wren at acme-corp"],
+            personas=["wren"], wiki="/path/to/acme-corp")
+        self.assertEqual(out, {"appended": 1, "skipped": False})
+        row = json.loads(self.jot.read_text().splitlines()[0])
+        self.assertEqual(row["personas"], ["wren"])
+        self.assertEqual(row["wiki"], "/path/to/acme-corp")
+
     def test_phase4_schema_lines_still_dedup(self):
         # A pre-existing 4-key (no "personas") line for a session must still
         # trigger the dedup skip for that session — backward compat with
@@ -214,6 +239,21 @@ class TestJotAppend(unittest.TestCase):
                              "observation": "seeded line", "source": "user-turn"})
         self.jot.write_text(seeded + "\n")
         out = session_ops.jot_append(self.home, "2026-07-10-seeded", "2026-07-10", ["dupe"])
+        self.assertEqual(out, {"appended": 0, "skipped": True})
+
+    def test_pre_wiki_schema_lines_still_dedup(self):
+        # A pre-existing line with no "wiki" key (written before this field
+        # existed, with or without "personas") must still dedup by session
+        # when the CALLER now passes --wiki — the new field must never
+        # change what dedup inspects (still "session" only).
+        self.jot.parent.mkdir(parents=True, exist_ok=True)
+        seeded = json.dumps({"session": "2026-07-10-seeded", "date": "2026-07-10",
+                             "observation": "seeded line", "source": "user-turn",
+                             "personas": ["wren"]})
+        self.jot.write_text(seeded + "\n")
+        out = session_ops.jot_append(
+            self.home, "2026-07-10-seeded", "2026-07-10", ["dupe"],
+            wiki="/path/to/acme-corp")
         self.assertEqual(out, {"appended": 0, "skipped": True})
 
     def test_missing_home_exit_2(self):
@@ -245,6 +285,33 @@ class TestJotAppend(unittest.TestCase):
         self.assertEqual(payload, {"appended": 2, "skipped": False})
         lines = self.jot.read_text().splitlines()
         self.assertEqual(len(lines), 2)
+
+    def test_cli_wiki_flag_written(self):
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "jot-append",
+             "--home", str(self.home),
+             "--session", "2026-07-11-demo",
+             "--date", "2026-07-11",
+             "--observation", "first observation",
+             "--wiki", "/path/to/acme-corp"],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, f"stderr: {result.stderr}")
+        row = json.loads(self.jot.read_text().splitlines()[0])
+        self.assertEqual(row["wiki"], "/path/to/acme-corp")
+
+    def test_cli_wiki_flag_omitted_when_absent(self):
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "jot-append",
+             "--home", str(self.home),
+             "--session", "2026-07-11-demo",
+             "--date", "2026-07-11",
+             "--observation", "first observation"],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, f"stderr: {result.stderr}")
+        row = json.loads(self.jot.read_text().splitlines()[0])
+        self.assertNotIn("wiki", row)
 
 
 class TestSweepScan(unittest.TestCase):

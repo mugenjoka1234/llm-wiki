@@ -13,13 +13,16 @@ Usage:
       unwritable (e.g. its parent directory does not exist).
 
   session_ops.py jot-append --home H --session S --date D --observation TEXT
-      [--persona SLUG]...
+      [--persona SLUG]... [--wiki W]
       Append one JSON line per `--observation` (repeatable) to
       `H/patterns/pattern-log.jsonl`, unless a line with `"session" == S`
       already exists in the file (then the whole call is a no-op). Each
       repeatable `--persona SLUG` is applied to every observation in this
       call and written as a `"personas"` list; omitted entirely when no
-      `--persona` is given. JSON on stdout, exit 0. Exit 2 when `H` is not a
+      `--persona` is given. `--wiki W` is applied to every observation in
+      this call and written as a `"wiki"` string field; omitted entirely
+      when not given (same additive, omit-when-absent contract as
+      `"personas"`). JSON on stdout, exit 0. Exit 2 when `H` is not a
       directory.
 
   session_ops.py sweep-scan --wiki-root W
@@ -150,7 +153,7 @@ def append_once(path: Path, marker: str, text: str, heading: str | None = None) 
 
 
 def jot_append(home: Path, session: str, date: str, observations: list[str],
-                personas: list[str] | None = None) -> dict:
+                personas: list[str] | None = None, wiki: str | None = None) -> dict:
     """Append pattern-jot observations, deduped by session ID.
 
     Rules (spec: "pattern-jot appends skip if the session ID is already
@@ -171,6 +174,14 @@ def jot_append(home: Path, session: str, date: str, observations: list[str],
     freshly-written unclassified lines schema-identical, and dedup (by
     session, above) is unaffected either way since it only inspects
     `"session"`.
+
+    `wiki` is an optional provenance string (the wiki/project this call's
+    observations concern — session-close passes the resolved wiki path)
+    applied to ALL observations in this call, written as a `"wiki"` field.
+    Same additive contract as `personas`: None or empty omits the key
+    entirely rather than writing it as `""`, keeping pre-existing jot lines
+    (with or without `"personas"`, with or without `"wiki"`) schema-
+    compatible, and dedup is unaffected (still inspects only `"session"`).
 
     Unparseable existing lines are ignored (never a crash) — the file is a
     plain append-only log (`open(path, "a")`), not lock-protected, so the
@@ -211,6 +222,8 @@ def jot_append(home: Path, session: str, date: str, observations: list[str],
                    "source": "user-turn"}
             if personas:
                 row["personas"] = personas
+            if wiki:
+                row["wiki"] = wiki
             f.write(json.dumps(row) + "\n")
 
     return {"appended": len(observations), "skipped": False}
@@ -487,13 +500,13 @@ def _cmd_append_once(path_str: str, marker: str, text: str, heading: str | None)
 
 
 def _cmd_jot_append(home_str: str, session: str, date: str, observations: list[str],
-                     personas: list[str] | None = None) -> int:
+                     personas: list[str] | None = None, wiki: str | None = None) -> int:
     home = Path(home_str)
     if not home.is_dir():
         print(json.dumps({"appended": 0, "skipped": False,
                           "error": f"factory home not found: {home}"}))
         return 2
-    result = jot_append(home, session, date, observations, personas=personas)
+    result = jot_append(home, session, date, observations, personas=personas, wiki=wiki)
     print(json.dumps(result))
     return 0
 
@@ -587,6 +600,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="Observation text (repeatable).")
     jot_p.add_argument("--persona", dest="personas", action="append", default=[],
                         help="Persona slug this call's observations belong to (repeatable).")
+    jot_p.add_argument("--wiki", default=None,
+                        help="Wiki/project path this call's observations concern (provenance).")
 
     sweep_p = subparsers.add_parser(
         "sweep-scan",
@@ -612,7 +627,7 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_append_once(args.path, args.marker, text, args.heading)
     if args.subcommand == "jot-append":
         return _cmd_jot_append(args.home, args.session, args.date, args.observations,
-                                personas=args.personas)
+                                personas=args.personas, wiki=args.wiki)
     if args.subcommand == "sweep-scan":
         return _cmd_sweep_scan(args.wiki_root)
     if args.subcommand == "breadcrumb":

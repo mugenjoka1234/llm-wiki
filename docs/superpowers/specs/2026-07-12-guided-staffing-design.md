@@ -22,7 +22,17 @@ One guided session takes a user from an empty factory home to: a staffed, valida
 | Starter roster | **Nine genericized archetypes** shipped at `plugin/assets/starter-roster/`: product-strategist, ux-realist, domain-reality-checker, market-strategist, marketplace-economist, delivery-gatekeeper, copy-qa-lead, privacy-trust-lead, visual-design-lead. Each in full factory format, validating clean out of the box, `domain: []` left for staffing to fill. |
 | Runtimes | Claude Code primary. The flow requires only Q&A, python CLIs, and file writes — no subagent dispatch — so the skill also ships in the Gemini shim (best-effort; `/team` itself remains Claude-only). |
 
-## The standard questionnaire (v1 — fixed, asked verbatim, one at a time)
+## Context-first interviewing (the superpowers pattern)
+
+The questionnaire below is a **standard intake checklist, not a cold script**. Before asking anything, the skill fetches context and drafts answers from it:
+
+- the current project: README, docs tree, recent git log, package/app manifests;
+- the project wiki, if one resolves: `overview.md` theses, open questions, entity catalog;
+- the factory home: existing personas, teams, guidelines, prior intake sections.
+
+Each checklist item is then resolved in order of preference: **(1) inferred and confirmed** — present the drafted answer as a specific confirm-or-correct question ("From your README and wiki theses, you're building <X> at prototype stage, for <audience> — right?"); **(2) asked narrowly** when context gave a partial picture; **(3) asked open-ended** only when nothing was inferable. One item per message, always. The intake file records the final answers plus what was inferred vs. user-stated (provenance matters for later re-staffing).
+
+## The standard intake checklist (v1 — fixed items, context-first resolution)
 
 1. What are you building? One paragraph — and what stage is it at (idea / prototype / live)?
 2. Who is it for, and what is the hardest part of serving them well?
@@ -37,7 +47,7 @@ Answers are recorded to `<factory-home>/instructions/staffing-intake.md` (create
 ## Flow (skill outline)
 
 1. **Preflight** — resolve factory home (STOP with hint if absent, like `/team`); detect existing roster/teams (staffing an existing org = expansion mode: same flow, slate seeded with current members).
-2. **Interview** — the questionnaire above; write the intake file.
+2. **Context fetch + interview** — scan project/wiki/factory-home context, draft answers, then run the intake checklist context-first (confirm-or-correct before open-ended); write the intake file with inferred-vs-stated provenance.
 3. **Resource triage** (if Q6 provided) — read the docs; present the three-destination table; on approval write guidelines/shape-notes, and queue wiki-ingest offers (never auto-ingest).
 4. **Composition proposal** — recommended slate: role, why (tied to intake answers), source (starter / agency-agents / references), what each member covers. User edits the slate before anything is fetched.
 5. **Source & adapt** — starter/reference candidates copied; agency-agents selections fetched from GitHub (or the local mirror); each shaped into factory format: citation anchor + fenced immutables preserved, `description:` ≤600 in "Use when…" form, `domain:` tags from the intake, expertise sections informed by triaged domain material.

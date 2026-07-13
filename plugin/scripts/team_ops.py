@@ -27,17 +27,20 @@ Usage:
       member dict gains `"layer": "project"|"factory"`; a project-layer hit
       also gains `"project": "<W-basename>"` and, when the copy's
       provenance frontmatter shows the base has since changed, a
-      `"drift_notice"` string. Omitting --wiki-root is byte-identical to
-      today's factory-only behavior (only the `"layer": "factory"` key is
-      new on every member).
+      `"drift_notice"` string. An UNREADABLE project copy (exists but e.g.
+      permission-denied) never crashes the resolve: that member degrades
+      to the factory layer with a `"layer_warning"` string (or to
+      `missing` when the factory base is also absent). Omitting
+      --wiki-root is byte-identical to today's factory-only behavior
+      (only the `"layer": "factory"` key is new on every member).
   team_ops.py resolve-persona <slug> [--wiki-root W]
       Resolve a single persona by slug with the same project-over-factory
       precedence as resolve-team (used by /team's solo invocation, which
       previously hand-rolled a factory-only path check). JSON `{"file":
-      ..., "layer": ...}` on stdout (+ `"project"`/`"drift_notice"` when a
-      project-layer hit applies — see resolve-team above). Exit 0 on a hit,
-      exit 2 when the factory home is absent/missing or the slug resolves
-      in neither layer.
+      ..., "layer": ...}` on stdout (+ `"project"`/`"drift_notice"`/
+      `"layer_warning"` under the same conditions as resolve-team above).
+      Exit 0 on a hit, exit 2 when the factory home is absent/missing or
+      the slug resolves in neither layer.
   team_ops.py validate-persona <path> [--project NAME]
       Validate a persona file's frontmatter/anchors; JSON on stdout. Exit 0
       when ok, 1 when there are errors, 2 when the path isn't a file.
@@ -58,7 +61,16 @@ Usage:
       copy's `base-hash:` frontmatter line — ONLY that line — to the new
       value, atomically (tmp+rename). JSON `{"acked": true, "base_hash":
       <new hex digest>}` on stdout. Exit 2 when the copy's frontmatter has
-      no `base-slug`, or when `<home>/agents/<base-slug>.md` doesn't exist.
+      no `base-slug`, when `<home>/agents/<base-slug>.md` doesn't exist,
+      or when no factory home is registered (same register-factory-home
+      hint as resolve-team).
+      PROVENANCE LINE-FORMAT CONTRACT (for whatever writes project
+      copies): `base-slug:`, `forked:`, and `base-hash:` must each be a
+      single physical frontmatter line with a plain (or plainly quoted)
+      scalar value — no YAML block-scalar folding (`>-`/`|`), no
+      multi-line continuation. ack-fork's surgical rewrite matches the
+      `base-hash:` value on its one line; a folded/multi-line value would
+      make the rewrite silently no-op.
   team_ops.py anchors-unchanged <original> <edited>
       Verify the fenced Immutable Anchors survived an edit: byte-identical
       content, well-formed marker structure, and unchanged section location
@@ -196,6 +208,9 @@ def resolve_team(home: Path, team_name: str, wiki_root: Path | None = None) -> d
         --project <this value>` without re-deriving it itself.
       - `"drift_notice"` (project layer only, and only when it fires): see
         `_drift_notice`.
+      - `"layer_warning"` (only when an unreadable project copy forced a
+        fallback to the factory layer): see `_resolve_persona_path`. One
+        unreadable copy degrades that member, never crashes the resolve.
     """
     team_file = home / "teams" / f"{team_name}.yaml"
     if not team_file.is_file():
@@ -213,10 +228,12 @@ def resolve_team(home: Path, team_name: str, wiki_root: Path | None = None) -> d
         if hit is None:
             missing.append({"agent": agent, "role": member.get("role")})
             continue
-        persona_file, layer = hit
+        persona_file, layer, layer_warning = hit
         entry = dict(member)
         entry["file"] = str(persona_file)
         entry["layer"] = layer
+        if layer_warning:
+            entry["layer_warning"] = layer_warning
         if layer == "project":
             entry["project"] = Path(wiki_root).resolve().name
             notice = _drift_notice(persona_file, home)
@@ -236,17 +253,32 @@ def resolve_team(home: Path, team_name: str, wiki_root: Path | None = None) -> d
 # and `resolve_persona` (the solo-lookup machinery) share.
 
 def _resolve_persona_path(home: Path, agent: str, wiki_root: Path | None
-                           ) -> tuple[Path, str] | None:
+                           ) -> tuple[Path, str, str | None] | None:
     """Resolve one persona slug against the project layer (if `wiki_root` is
-    given) first, falling back to the factory layer. Returns `(path,
-    layer)`, or None when the slug resolves in NEITHER layer."""
+    given) first, falling back to the factory layer. Returns `(path, layer,
+    layer_warning)`, or None when the slug resolves in NEITHER layer.
+
+    `layer_warning` is None on both normal paths. An UNREADABLE project
+    copy — the file exists but can't be read, e.g. permission-denied;
+    probed with a real read, since `is_file()` alone can't detect it —
+    must never crash a whole team resolve on account of one bad file: it
+    degrades to the factory layer with `layer_warning` set ("project copy
+    unreadable (<err>) — fell back to factory"), or to a None return
+    (reported as missing by the callers) when the factory base is also
+    absent."""
+    layer_warning: str | None = None
     if wiki_root is not None:
         project_file = Path(wiki_root) / "personas" / f"{agent}.md"
         if project_file.is_file():
-            return project_file, "project"
+            try:
+                project_file.read_text()  # readability probe
+                return project_file, "project", None
+            except OSError as exc:
+                layer_warning = (f"project copy unreadable ({exc}) — "
+                                 f"fell back to factory")
     factory_file = home / "agents" / f"{agent}.md"
     if factory_file.is_file():
-        return factory_file, "factory"
+        return factory_file, "factory", layer_warning
     return None
 
 
@@ -274,9 +306,14 @@ def _drift_notice(persona_file: Path, home: Path) -> str | None:
     `base-hash` is present AND the base file exists AND the hashes differ.
     Any missing piece — no `base-slug`, no `base-hash`, or the named base
     file no longer exists — returns None SILENTLY: this is a best-effort
-    backstop, never an error path.
+    backstop, never an error path. That includes unreadable files (OSError
+    on the copy's frontmatter read or the base's byte read): silent None,
+    never a crash out of a team resolve.
     """
-    fm = _frontmatter(persona_file)
+    try:
+        fm = _frontmatter(persona_file)
+    except OSError:
+        return None
     base_slug = fm.get("base-slug")
     base_hash = fm.get("base-hash")
     if not base_slug or not base_hash:
@@ -284,7 +321,10 @@ def _drift_notice(persona_file: Path, home: Path) -> str | None:
     base_file = home / "agents" / f"{base_slug}.md"
     if not base_file.is_file():
         return None
-    current_hash = hashlib.sha256(base_file.read_bytes()).hexdigest()
+    try:
+        current_hash = hashlib.sha256(base_file.read_bytes()).hexdigest()
+    except OSError:
+        return None
     if current_hash == base_hash:
         return None
     return (f"base {base_slug} has changed since this copy forked — "
@@ -298,15 +338,18 @@ def resolve_persona(home: Path, slug: str, wiki_root: Path | None = None) -> dic
     previously hand-rolled a factory-only `ls` + path check directly in the
     SKILL.
 
-    Returns `{"file": <str>, "layer": "project"|"factory"}` (+ `"project"`
-    and, when it fires, `"drift_notice"` — see `resolve_team`'s docstring
-    for both) on a hit, or None when `slug` resolves in NEITHER layer.
+    Returns `{"file": <str>, "layer": "project"|"factory"}` (+ `"project"`,
+    `"drift_notice"`, and `"layer_warning"` under the same conditions as
+    `resolve_team`'s member dicts — see its docstring) on a hit, or None
+    when `slug` resolves in NEITHER layer.
     """
     hit = _resolve_persona_path(home, slug, wiki_root)
     if hit is None:
         return None
-    persona_file, layer = hit
+    persona_file, layer, layer_warning = hit
     result: dict = {"file": str(persona_file), "layer": layer}
+    if layer_warning:
+        result["layer_warning"] = layer_warning
     if layer == "project":
         result["project"] = Path(wiki_root).resolve().name
         notice = _drift_notice(persona_file, home)
@@ -1344,11 +1387,22 @@ def _cmd_ack_fork(copy_path_str: str) -> int:
         print(json.dumps({"acked": False, "error": f"copy not found: {copy_path}"}))
         return 2
 
-    home = _resolve_factory_home_best_effort()
+    # ack-fork hard-requires a resolvable factory home (the base hash is
+    # recomputed against it) — same hint style as resolve-team, NOT a
+    # misleading "base persona not found" against a sentinel path.
+    recorded = _load_factory_home_or_hint()
+    if recorded is None:
+        return 2
+
     try:
-        result = ack_fork(copy_path, home)
+        result = ack_fork(copy_path, Path(recorded))
     except AckForkError as exc:
         print(json.dumps({"acked": False, "error": str(exc)}))
+        return 2
+    except OSError as exc:
+        # An unreadable copy (exists but e.g. permission-denied) is still
+        # exit-2 JSON, never a traceback.
+        print(json.dumps({"acked": False, "error": f"unreadable copy: {exc}"}))
         return 2
 
     print(json.dumps(result))

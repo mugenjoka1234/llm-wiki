@@ -384,6 +384,137 @@ class TestDriftNotice(unittest.TestCase):
             out = team_ops.resolve_team(home, "demo-team", wiki_root=wiki_root)
             self.assertIn("drift_notice", out["members"][0])
 
+    def test_drift_checks_against_named_base_not_filename(self):
+        """A copy whose `base-slug` differs from its own filename must
+        resolve normally AND drift-check against the NAMED base
+        (agents/sage.md), not a file matching the copy's own slug (wren —
+        which doesn't even exist in agents/ here)."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            home = make_factory_home(tmp, personas=())
+            sage_text = PERSONA_BODY.format(name="Sage", role="Domain Lead")
+            (home / "agents" / "sage.md").write_text(sage_text)
+            wiki_root = tmp / "acme-corp"
+            wiki_root.mkdir()
+            copy_path = make_project_copy(wiki_root, "wren", PERSONA_PROJECT_COPY.format(
+                name="Wren", role="Domain Lead", description="Use when testing.",
+                base_slug="sage", forked="2026-06-01",
+                base_hash=sha256_text("stale — not sage's current text"),
+                project="acme-corp"))
+
+            result = team_ops.resolve_persona(home, "wren", wiki_root=wiki_root)
+            self.assertEqual(result["layer"], "project")
+            self.assertIn("base sage has changed", result["drift_notice"])
+
+            # ack-fork recomputes against the NAMED base (sage.md), too.
+            ack = team_ops.ack_fork(copy_path, home)
+            self.assertEqual(ack["base_hash"], sha256_text(sage_text))
+            after = team_ops.resolve_persona(home, "wren", wiki_root=wiki_root)
+            self.assertNotIn("drift_notice", after)
+
+
+# --- Unreadable project copies: degrade, never crash -------------------------
+
+def _make_unreadable(test: unittest.TestCase, path: Path) -> None:
+    """chmod-000 `path` and register cleanup; skip the calling test when the
+    filesystem/effective user (e.g. root) doesn't enforce mode 000 —
+    mirrors test_team_ops_integration.py's permission-denied pattern."""
+    path.chmod(0)
+
+    def _restore():
+        try:
+            path.chmod(0o644)
+        except FileNotFoundError:
+            pass  # tempdir context manager already removed the tree
+    test.addCleanup(_restore)
+    try:
+        path.read_text()
+        test.skipTest("chmod 000 not enforced on this filesystem/user")
+    except PermissionError:
+        pass
+
+
+class TestUnreadableProjectCopy(unittest.TestCase):
+    """The Important review finding, live-reproduced by the reviewer: an
+    unreadable (chmod-000) project copy must never escape as a traceback
+    out of resolve_team/resolve_persona — it degrades to the factory layer
+    with a `layer_warning`, or to `missing` when the base is also absent."""
+
+    def test_resolve_persona_falls_back_to_factory_with_warning(self):
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            home = make_factory_home(tmp)  # agents/ada.md exists
+            wiki_root = tmp / "acme-corp"
+            wiki_root.mkdir()
+            copy_path = make_project_copy(
+                wiki_root, "ada", PERSONA_BODY.format(name="Ada Copy", role="Flavor"))
+            _make_unreadable(self, copy_path)
+
+            result = team_ops.resolve_persona(home, "ada", wiki_root=wiki_root)
+
+            self.assertEqual(result["layer"], "factory")
+            self.assertEqual(Path(result["file"]).resolve(),
+                              (home / "agents" / "ada.md").resolve())
+            self.assertIn("fell back to factory", result["layer_warning"])
+            self.assertNotIn("project", result)
+            self.assertNotIn("drift_notice", result)
+
+    def test_resolve_team_member_degrades_with_warning(self):
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            home = make_factory_home(tmp)
+            wiki_root = tmp / "acme-corp"
+            wiki_root.mkdir()
+            copy_path = make_project_copy(
+                wiki_root, "ada", PERSONA_BODY.format(name="Ada Copy", role="Flavor"))
+            _make_unreadable(self, copy_path)
+
+            out = team_ops.resolve_team(home, "demo-team", wiki_root=wiki_root)
+
+            member = out["members"][0]
+            self.assertEqual(member["agent"], "ada")
+            self.assertEqual(member["layer"], "factory")
+            self.assertIn("fell back to factory", member["layer_warning"])
+
+    def test_unreadable_copy_and_absent_base_reports_missing(self):
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            home = make_factory_home(tmp, personas=())  # no ada.md in agents/
+            wiki_root = tmp / "acme-corp"
+            wiki_root.mkdir()
+            copy_path = make_project_copy(
+                wiki_root, "ada", PERSONA_BODY.format(name="Ada Copy", role="Flavor"))
+            _make_unreadable(self, copy_path)
+
+            self.assertIsNone(
+                team_ops.resolve_persona(home, "ada", wiki_root=wiki_root))
+            out = team_ops.resolve_team(home, "demo-team", wiki_root=wiki_root)
+            self.assertIn({"agent": "ada", "role": "Lead Tester"}, out["missing"])
+
+    def test_cli_resolve_team_returns_json_exit_0(self):
+        """The reviewer's exact repro: the CLI must return JSON with exit 0
+        (degraded member), never a traceback with exit 1."""
+        tmpdir = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, tmpdir)
+        root = Path(tmpdir)
+        home = make_factory_home(root)
+        wiki_root = root / "acme-corp"
+        wiki_root.mkdir()
+        copy_path = make_project_copy(
+            wiki_root, "ada", PERSONA_BODY.format(name="Ada Copy", role="Flavor"))
+        _make_unreadable(self, copy_path)
+        _write_factory_home_registry(root, home)
+        env = _env_with_registry(root)
+
+        result = _run("resolve-team", "demo-team", "--wiki-root", str(wiki_root), env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        payload = json.loads(result.stdout)  # JSON, not a traceback
+        member = payload["members"][0]
+        self.assertEqual(member["layer"], "factory")
+        self.assertIn("fell back to factory", member["layer_warning"])
+
 
 # --- ack-fork -----------------------------------------------------------------
 
@@ -543,6 +674,23 @@ class TestCliAckFork(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         payload = json.loads(result.stdout)
         self.assertFalse(payload["acked"])
+
+    def test_cli_exit_2_no_factory_home_with_register_hint(self):
+        """No registered factory home: the error must be the SAME
+        register-factory-home hint style resolve-team uses — not a
+        misleading 'base persona not found' against a sentinel path."""
+        copy_path = self.root / "wren.md"
+        copy_path.write_text(PERSONA_PROJECT_COPY.format(
+            name="Wren", role="Domain Lead", description="Use when testing.",
+            base_slug="wren", forked="2026-06-01",
+            base_hash=sha256_text("anything"), project="acme-corp"))
+        env = _env_with_registry(self.root)  # no registry.txt written at all
+
+        result = _run("ack-fork", str(copy_path), env=env)
+        self.assertEqual(result.returncode, 2)
+        payload = json.loads(result.stdout)
+        self.assertIn("register-factory-home", payload["hint"])
+        self.assertNotIn("base persona not found", json.dumps(payload))
 
 
 if __name__ == "__main__":

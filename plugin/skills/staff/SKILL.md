@@ -261,11 +261,21 @@ For each approved slate row:
    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" resolve-persona "<slug>" [--wiki-root "<wiki-root>"]
    ```
 
-   Exit 0 (a hit) means the slug is **already taken** in one of the layers —
-   propose a variant slug (e.g. `<slug>-2`) or, if this hire is headed for a
-   project copy anyway, confirm the collision is against the factory base
-   only (a project copy at the same slug in a *different* wiki is not a
-   collision here). Exit 2 (given Step 0 already confirmed the factory home
+   Exit 0 (a hit) means the slug is **already taken** — branch on the
+   returned JSON's **`layer`** field to tell base from copy:
+   - `"layer": "factory"` → the collision is with the **base** persona at
+     `<factory-home>/agents/<slug>.md` — propose a variant slug (e.g.
+     `<slug>-2`) or, when this hire carries client flavor and a wiki
+     resolved, a project-level copy of that existing base instead of a new
+     base.
+   - `"layer": "project"` → an existing **project copy** already occupies
+     the slug at `<wiki-root>/personas/<slug>.md` — offer to update that
+     copy (shown as a diff, same gate as any other write this run) or
+     rename the new hire; never overwrite it silently.
+
+   A project copy at the same slug in a *different* wiki is not a collision
+   here — `resolve-persona` checks only the `--wiki-root` you pass plus the
+   factory home. Exit 2 (given Step 0 already confirmed the factory home
    resolves) means the slug is free in every layer checked — proceed.
 
 3. **Transform into factory format**, using

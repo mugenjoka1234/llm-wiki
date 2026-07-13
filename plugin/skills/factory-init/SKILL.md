@@ -46,6 +46,16 @@ exists — never overwrite a home's copy, which may have local edits):
 Every persona template's immutable anchor cites `CITATION_STANDARD.md` by
 name; this step is what makes that reference resolve to a real file.
 
+Once the factory home resolves (newly registered or already known), check the roster:
+
+```bash
+ls "<factory-home>/agents/"*.md 2>/dev/null
+```
+
+If it lists nothing, the roster is empty — offer one sentence: `/staff` runs a
+guided interview to build an initial team roster from the starter/catalog
+candidates, so the user isn't left with a home and no one staffed in it.
+
 If the user declines to register one, continue WITHOUT a factory home — the wiki
 still works; warn that `/team` and `/improve` will be unavailable until registered.
 

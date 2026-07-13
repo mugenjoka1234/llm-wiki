@@ -283,8 +283,17 @@ know about. For each such observation:
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/session_ops.py" jot-append \
   --home "<factory-home>" --session "<ID>" --date "<YYYY-MM-DD>" \
-  --observation "<observation text>" --observation "<another, if any>"
+  --observation "<observation text>" --observation "<another, if any>" \
+  --wiki "<wiki-root>"
 ```
+
+`--wiki` takes the resolved wiki root path from Step 0 (per `jot_append`'s
+docstring: "the wiki/project this call's observations concern — session-close
+passes the resolved wiki path") — the path itself, not its basename or any
+other derived form. It is provenance only, applied to every observation in
+this call; omit it (never pass an empty string) if for some reason the wiki
+root isn't at hand, since `jot_append` treats a falsy `--wiki` as "no
+provenance" and omits the `"wiki"` key entirely rather than writing it empty.
 
 `jot-append` dedups by construction — a second call with the same
 `--session` is a whole-call no-op, so re-running this step after a crash

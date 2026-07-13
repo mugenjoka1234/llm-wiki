@@ -10,6 +10,11 @@ purpose: "{{TEAM_PURPOSE}}"
 # project: path to the project this team works on
 project: "{{PROJECT_PATH}}"
 
+# notes: optional — free-form context about this team (e.g. staffing
+# history, known constraints); outside the parser's modeled subset, so it's
+# ignored silently by team_ops.parse_team_yaml — safe to add or omit.
+# notes: "{{TEAM_NOTES}}"
+
 # members: list of agents and their roles
 members:
   # agent: roster slug — must match a persona file in the factory home's agents/ directory

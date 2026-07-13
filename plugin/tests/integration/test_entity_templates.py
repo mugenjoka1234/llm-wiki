@@ -1,10 +1,13 @@
 """Integration tests for entity templates in assets/entity-templates/.
 
 Tests verify template structure, required frontmatter fields, and the
-external-ref field (v1.1 feature — fully landed across all templates as of Wave 2F).
+external-ref field (v1.1 feature — landed across every template as of Wave
+2F except the two synthesis/index pages that track a different kind of
+provenance instead: subdomain-stub.md (`source-wiki:`) and index.md (no
+per-entity ref at all — it's the wiki's own auto-generated catalog page).
 
-Template inventory (14 total):
-  competitor, decision, experiment, feature, initiative, jtbd,
+Template inventory (15 total):
+  competitor, decision, experiment, feature, index, initiative, jtbd,
   metric, overview, question, segment, session, source, stub, subdomain-stub
 """
 from pathlib import Path
@@ -25,12 +28,14 @@ BASE_REQUIRED_FIELDS = [
     "tags:",
 ]
 
-# Templates that carry the external-ref field (all 14 as of Wave 2F v1.1 rollout)
+# The full entity-template set on disk (15, including index.md — the wiki's
+# auto-generated catalog page, added post-Wave-2F).
 EXPECTED_TEMPLATES = {
     "competitor.md",
     "decision.md",
     "experiment.md",
     "feature.md",
+    "index.md",
     "initiative.md",
     "jtbd.md",
     "metric.md",
@@ -51,7 +56,7 @@ def test_template_directory_exists():
 
 
 def test_expected_template_set():
-    """Should have exactly the expected 14 entity templates (no missing, no extras)."""
+    """Should have exactly the expected 15 entity templates (no missing, no extras)."""
     actual = {t.name for t in TEMPLATES_DIR.glob("*.md")}
     missing = EXPECTED_TEMPLATES - actual
     extra = actual - EXPECTED_TEMPLATES
@@ -88,13 +93,18 @@ def test_all_templates_have_base_required_fields():
 
 
 def test_entity_templates_have_external_ref():
-    """Entity templates (non-subdomain) should have the external-ref field (v1.1 rollout).
+    """Entity templates (non-subdomain, non-index) should have the
+    external-ref field (v1.1 rollout).
 
     subdomain-stub.md is excluded — it uses source-wiki: instead as it's a
-    synthesis page that tracks which parent wiki it mirrors, not an entity ref.
+    synthesis page that tracks which parent wiki it mirrors, not an entity
+    ref. index.md is excluded for the same reason: it's the wiki's own
+    auto-generated catalog page, not an entity with something external to
+    reference.
     """
-    # subdomain-stub.md uses source-wiki: rather than external-ref
-    excluded = {"subdomain-stub.md"}
+    # subdomain-stub.md uses source-wiki: rather than external-ref;
+    # index.md has neither — it isn't an entity page at all.
+    excluded = {"subdomain-stub.md", "index.md"}
     missing = []
     for t in sorted(TEMPLATES_DIR.glob("*.md")):
         if t.name in excluded:

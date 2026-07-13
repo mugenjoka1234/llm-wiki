@@ -4,6 +4,13 @@ role: {{ROLE}}
 description: "{{DESCRIPTION}}"
 version: v1.0
 domain: []
+# Project copies (a wiki's personas/<slug>.md forked from this factory-home
+# base) add three single-line provenance fields here: `base-slug:` (the
+# factory-home slug this copy forked from), `forked:` (the fork date), and
+# `base-hash:` (sha256 of the base file at fork time, used to detect drift).
+# Each must stay a single plain (or plainly-quoted) scalar line — no YAML
+# block-scalar folding or multi-line continuation — since ack-fork's
+# surgical rewrite only ever matches the `base-hash:` line as one line.
 ---
 
 # {{NAME}} — {{ROLE}}

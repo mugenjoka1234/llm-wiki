@@ -218,18 +218,26 @@ class TestSearchCandidatesRealCatalog(unittest.TestCase):
         catalog_hits = [r for r in results if r["source"] == "catalog"]
         self.assertGreater(len(catalog_hits), 0, "no catalog-sourced hits at all")
 
-        # The top hit is the real, vendored "Product Manager" persona under
-        # the "product" division — pinned by Task 2's own report sample;
-        # asserting it here proves the wrapper contract (name/source/
-        # division/description/path/score) against the actual shipped file,
-        # not a fixture standing in for it.
+        # The top hit is a scoring catalog result — deliberately NOT pinned
+        # to a specific persona: today "Product Manager" tops the list only
+        # by alphabetical tie-break against "Sprint Prioritizer" (both
+        # score 2), so pinning the ordering would false-fail on a future
+        # catalog re-sync with zero machinery regression.
         top = results[0]
-        self.assertEqual(top["name"], "Product Manager")
+        self.assertGreaterEqual(top["score"], 1)
         self.assertEqual(top["source"], "catalog")
-        self.assertEqual(top["division"], "product")
-        self.assertTrue(top["description"])
-        self.assertTrue(Path(top["path"]).is_file())
-        self.assertGreater(top["score"], 0)
+
+        # The real, vendored "Product Manager" persona appears SOMEWHERE in
+        # the results, under the "product" division — proving the wrapper
+        # contract (name/source/division/description/path/score) against
+        # the actual shipped file, not a fixture standing in for it.
+        pm_hits = [r for r in catalog_hits
+                   if r["name"] == "Product Manager" and r["division"] == "product"]
+        self.assertEqual(len(pm_hits), 1, catalog_hits)
+        pm = pm_hits[0]
+        self.assertTrue(pm["description"])
+        self.assertTrue(Path(pm["path"]).is_file())
+        self.assertGreater(pm["score"], 0)
 
         # Every catalog hit carries a real, non-null division (the vendored
         # catalog is organized into division subdirectories; only a

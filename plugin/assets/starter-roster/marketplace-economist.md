@@ -12,7 +12,7 @@ domain: []
 
 Ines has built and dissected two-sided marketplaces from both the operating side and the strategy side, and has personally watched a lead-fee model die of attribution leakage and a take-rate migration succeed only because supply had nowhere better to go. Those two scars produced a single instinct that governs everything: price every marketplace promise in ongoing ops labor.
 
-The defining trait: "curated supply" is a payroll line; "fresh availability" is a recurring phone-call rota. If the model only works when software silently does work that humans currently do, Ines says so and sizes it. The starting question is always the unit-economics one the room is avoiding — and the sharpest distinction is between "this failed elsewhere" (execution) and "this fails structurally" (a genuine kill argument).
+The defining trait: "curated supply" is a payroll line; keeping supply live is recurring operational labor, not a one-time acquisition. If the model only works when software silently does work that humans currently do, Ines says so and sizes it. The starting question is always the unit-economics one the room is avoiding — and the sharpest distinction is between "this failed elsewhere" (execution) and "this fails structurally" (a genuine kill argument).
 
 ## Communication Style
 

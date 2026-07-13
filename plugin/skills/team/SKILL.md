@@ -54,20 +54,27 @@ Branch on `status`:
   Tell the user to run `resolve_wiki.py register-factory-home <path>` and
   retry.
 
-For the `/team <name>` form, resolve the team's roster:
+For the `/team <name>` form, resolve the team's roster, passing the
+Preflight-resolved wiki root so any project-layer persona copy supersedes its
+factory-home base for this run:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" resolve-team "<name>"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" resolve-team "<name>" --wiki-root "<wiki-root>"
 ```
 
 This call re-checks the factory home itself and will also exit 2 with a JSON
 `hint` if it has gone missing between the two calls above — treat that exit
 the same way (STOP, surface the hint). On success it returns
-`{"team": {...}, "members": [...resolved, each with "file"...], "missing":
-[...]}`. Members in `missing` (persona file absent from `agents/`) are added
-directly to the panel roster (Step 4) with reason "persona file not found" —
-they are never retried or drafted on the fly; that is what `/team recruit` is
-for.
+`{"team": {...}, "members": [...resolved, each with "file", "layer"
+("project" or "factory")...], "missing": [...]}`. A project-layer member also
+carries `"project"` (the wiki-root's basename, verbatim — hand it straight
+back as `validate-persona --project` in Step 2, never re-derive it yourself)
+and, when its base has drifted since the copy forked, `"drift_notice"`; a
+project copy that exists but can't be read instead carries `"layer_warning"`
+and that one member degrades to its factory-layer base. Members in `missing`
+(persona file absent from BOTH layers) are added directly to the panel
+roster (Step 4) with reason "persona file not found" — they are never
+retried or drafted on the fly; that is what `/team recruit` is for.
 
 Members whose team-YAML entry has `invocation` starting with `on-demand` are
 **not spawned by default** — set them aside and list them to the user at the
@@ -77,10 +84,15 @@ end as available (see Step 3).
 
 Run once for every member about to be spawned this run (default members
 always; an on-demand member only when the user explicitly asks to include it,
-or via solo invocation):
+or via solo invocation). Branch on the member's `layer` from Step 1: a
+**project-layer** member (`"layer": "project"`) passes `--project "<the
+member's "project" value>"` verbatim — the same registry-basename exemption
+`/staff` uses for its project-copy hires (case-sensitive, never re-derived
+from the wiki root yourself). A **factory-layer** member is unchanged — no
+`--project`, the factory-home denylist is absolute, no exceptions:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" validate-persona "<member-file>"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" validate-persona "<member-file>" [--project "<member's project value>"]
 ```
 
 - **Exit 0** (`ok: true`) → proceed straight to Step 3 for this member.
@@ -98,7 +110,12 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" validate-persona "<member-fi
        python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" upgrade-persona "<member-file>" --description "<drafted text>"
        ```
        This is an atomic (tmp+rename) write to the real persona file — it
-       already happened by the time the command returns.
+       already happened by the time the command returns. This lazy-upgrade
+       branch applies identically to either layer: `upgrade-persona` writes
+       to whatever path it's given, so a project-layer copy at
+       `<wiki-root>/personas/<slug>.md` is upgraded exactly like a
+       factory-layer file at `<factory-home>/agents/<slug>.md` — no
+       layer-specific handling needed here.
     4. Re-run `validate-persona` on the same file.
     5. Regardless of outcome, **show the user a diff-shaped summary line**
        for the file just written, e.g.:
@@ -128,6 +145,10 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" assemble-context --wiki-root
 Returns `{"persona": ..., "orientation": [<paths>], "prior_positions":
 [{"page", "date", "type", "position"}, ...], "budget": {...}, "warnings":
 [...]}`.
+
+Carry each member's `layer` (from Step 1) forward alongside its assembled
+context — Step 4's panel roster reports it per spawned member, and reports
+any `drift_notice`/`layer_warning` the member carries.
 
 Compose the dispatch prompt from four pieces, then dispatch via the **Agent
 tool** with `subagent_type: general-purpose` (there is no plugin-registered
@@ -182,7 +203,16 @@ At the end of the run, list any on-demand members that were set aside in Step
 Before any synthesis content, the orchestrator's output **must open with a
 panel roster**:
 
-- **Spawned:** every member actually dispatched (name, role).
+- **Spawned:** every member actually dispatched (name, role, and its
+  `layer` — "project" or "factory"). If the member carries a `drift_notice`
+  (its project copy's base has changed since the copy forked), surface it
+  plainly as a note — this is disclosure, not a stop — quoting the exact
+  remediation command: `python3
+  "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" ack-fork "<member-file>"`. If
+  the member carries a `layer_warning` instead (its project copy was
+  unreadable and the member ran on its factory-layer base), surface that
+  too, so the user knows they got the factory base, not the project copy
+  they may have expected.
 - **Missing:** every member that did not run, each with name, role, and why —
   one of: persona file absent (from `resolve-team`'s `missing` list),
   validation error (from Step 2, with the actual error text), or spawn
@@ -220,11 +250,19 @@ addressing a named persona ("Wren, what do you think about X?").
 Same pipeline, single member, no team YAML and no synthesis step:
 
 1. Resolve the persona file directly: lowercase-and-hyphenate the given name
-   to a candidate slug and check `<factory-home>/agents/<slug>.md`. If it
-   doesn't exist, list the roster (`ls "<factory-home>/agents/"*.md`) and ask
-   the user which persona they meant — do not guess or fall back to a generic
-   answer voiced as that persona.
-2. Run Step 2 (lazy upgrade) against that one file.
+   to a candidate slug, then resolve it through the same layered machinery
+   Step 1 uses — never a hand-rolled path check:
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" resolve-persona "<slug>" --wiki-root "<wiki-root>"
+   ```
+   Exit 0 returns `{"file": ..., "layer": "project"|"factory"}` (+
+   `"project"`/`"drift_notice"`/`"layer_warning"` under the same conditions
+   as Step 1's member dicts). Exit 2 (the slug resolves in neither layer) →
+   list the roster (`ls "<factory-home>/agents/"*.md`) and ask the user
+   which persona they meant — do not guess or fall back to a generic answer
+   voiced as that persona.
+2. Run Step 2 (lazy upgrade) against that one file — same `--project` rule:
+   pass it when `"layer": "project"`, omit it when `"layer": "factory"`.
 3. Run Step 3's `assemble-context` and dispatch, with the question as the
    task. Same two verbatim instructions apply.
 4. Return the sub-agent's output as-is, including its `## Position
@@ -236,11 +274,24 @@ Same pipeline, single member, no team YAML and no synthesis step:
 
 Trigger: `/team recruit <role> for <task>`.
 
-1. **Source material.** Browse `<factory-home>/references/agency-agents/` for
-   a persona to adapt. **This directory may be empty — it currently is** in
-   the real factory home. When it has nothing usable for `<role>`, fall back
-   to drafting the persona from the role description + task directly, or from
-   a source file the user names.
+1. **Source material.** Search the factory home's own curated pool first,
+   then the vendored catalog second — the same references-before-catalog
+   tie-break `search-candidates` documents (ties break starter > references
+   > catalog):
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" search-candidates --query "<role terms>" --source references
+   ```
+   **This pool may be empty — it currently is** in the real factory home.
+   When it has nothing usable for `<role>`, fall back to the vendored
+   catalog:
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" search-candidates --query "<role terms>" --source catalog
+   ```
+   If neither pool has anything usable, draft the persona from the role
+   description + task directly, or from a source file the user names.
+   Staffing a whole team rather than a single hire? Point the user at
+   `/staff` instead — that skill runs the full guided interview and slate
+   composition; this step is the single-hire shortcut.
 2. **Draft.** Fill `${CLAUDE_PLUGIN_ROOT}/assets/factory-templates/persona.md`
    placeholders (`{{NAME}}`, `{{ROLE}}`, `{{DESCRIPTION}}`, plus the body
    sections) from the source material and the task. The description must be

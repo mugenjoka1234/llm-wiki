@@ -208,7 +208,12 @@ Returns `{"results": [{name, source, division, description, path, score}, ...]}`
 plus `"suggestions": [<catalog division names>]` when `results` is empty — use
 the suggestions to widen the query or division rather than fabricating a
 candidate. Search terms shorter than 3 characters are dropped (stopword
-floor) — keep queries to substantive words. `--source starter` searches
+floor) — keep queries to substantive words. Query words are matched
+independently (OR), and `score` is just the count of matched words, so a
+multi-word query where no candidate matches two or more words returns a
+flat same-`score` list sorted by name — signal, not ranking. When results
+look undifferentiated, re-query with a single distinctive word rather than
+a natural-language phrase. `--source starter` searches
 `plugin/assets/starter-roster/`, which **may not exist yet** (Plan 3 ships
 it separately) — an empty/absent starter pool is not an error; when it
 contributes nothing, say so plainly (*"the starter pool ships in a future

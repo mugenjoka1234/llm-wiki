@@ -1,8 +1,21 @@
 # llm-wiki
 
-A Claude Code plugin implementing the [Karpathy LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — an LLM maintains a persistent markdown wiki that compounds over time instead of re-discovering knowledge on every query — plus an AI-factory layer on top: a knowledge base your persona teams read from with a budgeted context, an idempotent session-close workflow, and a human-gated loop for improving those personas over time.
+**Institutional memory for AI agents — and the agent team that uses it.**
 
-**Model:** research, analyze, critique, or synthesize → findings filed into a growing wiki. Once a factory home is registered, persona teams read that wiki with bounded context, close out sessions idempotently, and propose their own instruction edits for you to approve.
+Great PMs don't remember everything; they run a process: write decisions down, record who dissented, brief the team before the meeting, review the work. Your codebase has git — but your product knowledge (decisions, research, rejected options, "what would change our mind") usually lives in scattered docs and heads, where neither humans nor AI agents can reliably find it.
+
+llm-wiki is that process, packaged as a Claude Code plugin, in two halves:
+
+- **The wiki (the memory):** a persistent markdown knowledge base — decision pages with lifecycle fields, trust-graded claims (`[verified]` / `[hypothesis]` / `[REFUTED]`), research digests, session logs. Based on the [Karpathy LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f): knowledge compounds instead of being re-discovered every session. Every wiki is an **Obsidian vault** — you browse your team's knowledge in a friendly app, no terminal required.
+- **The factory (the organization):** persona teams that read that wiki with budgeted context, sign their own positions (agents are never paraphrased), close out sessions idempotently — minutes, decisions, action items — and propose improvements to their own instructions that only *you* can approve.
+
+**You bring the vision, the problem statements, and the judgment on results. The system runs the team — and remembers everything.**
+
+## Who this is for
+
+- **PMs, UX researchers, strategists** — people whose work has no natural git. You get a staffed agent team, a documentation structure, and context that survives between sessions, out of the box. Interaction happens in Obsidian and plain markdown; the CLI footprint is two install commands.
+- **Engineers supporting them** — or building products where the agent needs more than code: the *why* behind the feature, not just the what.
+- **Anyone new to agent workflows** — the basics are taken care of: context preservation, specialist subagents from day one, and a filing discipline you don't have to invent.
 
 ---
 

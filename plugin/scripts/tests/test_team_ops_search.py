@@ -15,6 +15,7 @@ test_team_ops_integration.py's CLAUDE_PLUGIN_DATA isolation pattern.
 """
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -318,6 +319,112 @@ class TestZeroMatchSuggestions(unittest.TestCase):
         self.assertEqual(team_ops.catalog_divisions(), ["finance", "gis"])
 
 
+class TestScoringSemantics(unittest.TestCase):
+    """Term dedupe, word-boundary matching, and the short-term floor."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.catalog_root = Path(self.tmp.name) / "agency-agents"
+        _write(self.catalog_root / "misc" / "manager.md",
+               CATALOG_AGENT.format(
+                   name="Ops Manager",
+                   description="Keeps the studio running."))
+        self.patcher = mock.patch.object(
+            team_ops, "_catalog_root", return_value=self.catalog_root)
+        self.patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        self.tmp.cleanup()
+
+    def test_duplicate_terms_score_once(self):
+        once = team_ops.search_candidates(
+            "manager", home=None, division=None, source="catalog")
+        thrice = team_ops.search_candidates(
+            "manager manager manager", home=None, division=None, source="catalog")
+        self.assertEqual(len(once), 1)
+        self.assertEqual(len(thrice), 1)
+        self.assertEqual(once[0]["score"], thrice[0]["score"])
+
+    def test_word_boundary_no_prefix_match(self):
+        # "manage" must NOT match "manager" — whole-word semantics, not
+        # prefix/substring. (Deliberate trade-off, pinned here: no stemming;
+        # a user searching "manage" will not surface "manager" roles.)
+        results = team_ops.search_candidates(
+            "manage", home=None, division=None, source="catalog")
+        self.assertEqual(results, [])
+
+    def test_word_boundary_no_infix_match(self):
+        # "age" sits inside "Manager" but is not a word in the haystack.
+        results = team_ops.search_candidates(
+            "age", home=None, division=None, source="catalog")
+        self.assertEqual(results, [])
+
+    def test_terms_shorter_than_three_chars_dropped(self):
+        # "Ops" is a word in the name, but a 2-char query term never scores
+        # (stopword floor).
+        results = team_ops.search_candidates(
+            "op", home=None, division=None, source="catalog")
+        self.assertEqual(results, [])
+
+    def test_three_char_term_still_scores(self):
+        results = team_ops.search_candidates(
+            "ops", home=None, division=None, source="catalog")
+        self.assertEqual([r["name"] for r in results], ["Ops Manager"])
+
+    def test_the_matches_whole_word_only(self):
+        # "the" (3 chars, survives the floor) matches only where it appears
+        # as a whole word — "Keeps the studio running." hits; a description
+        # containing only "theater" does not.
+        _write(self.catalog_root / "misc" / "stagehand.md",
+               CATALOG_AGENT.format(
+                   name="Stagehand",
+                   description="Runs theater productions."))
+        results = team_ops.search_candidates(
+            "the", home=None, division=None, source="catalog")
+        self.assertEqual([r["name"] for r in results], ["Ops Manager"])
+
+
+class TestFoldedScalarDescription(unittest.TestCase):
+    """A catalog file using a YAML folded block scalar (`description: >-`)
+    must still yield its full description text — searchable and free of the
+    `>-` indicator. _frontmatter_description alone returns the indicator
+    plus raw continuation lines for block scalars (verified empirically);
+    the unfold fallback on top of it is what this class exercises."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.catalog_root = Path(self.tmp.name) / "agency-agents"
+        _write(self.catalog_root / "misc" / "folded.md",
+               "---\n"
+               "name: Folded Desc\n"
+               "description: >-\n"
+               "  Senior orchestration specialist for\n"
+               "  multi-agent pipelines.\n"
+               "color: blue\n"
+               "---\n"
+               "\n"
+               "# Folded Desc\n")
+        self.patcher = mock.patch.object(
+            team_ops, "_catalog_root", return_value=self.catalog_root)
+        self.patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        self.tmp.cleanup()
+
+    def test_folded_description_unfolded_and_fully_searchable(self):
+        # One term from each folded line: both must hit (continuation text
+        # is in the scored haystack, not just the first line).
+        results = team_ops.search_candidates(
+            "orchestration pipelines", home=None, division=None, source="catalog")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["score"], 2)
+        self.assertEqual(
+            results[0]["description"],
+            "Senior orchestration specialist for multi-agent pipelines.")
+
+
 class TestCliSearchCandidates(unittest.TestCase):
     """CLI-level behavior: wrapper object shape, exit codes."""
 
@@ -399,6 +506,42 @@ class TestRealCatalog(unittest.TestCase):
         self.assertEqual(top["division"], "product")
         self.assertTrue(top["description"])
         self.assertEqual(top["score"], 2)  # "product" and "manager" both hit
+
+    def test_the_hits_are_whole_word_not_substring(self):
+        # Regression for substring inflation: unanchored containment let
+        # "the" match dozens of catalog files through "theater"/"theory"/
+        # "aesthetic" etc. Every hit must now genuinely contain "the" as a
+        # standalone word in its scored haystack (name + description; the
+        # catalog carries no domain: tags), and the word-boundary count
+        # must be strictly below the old substring count.
+        results = team_ops.search_candidates(
+            "the", home=None, division=None, source="catalog")
+        word_re = re.compile(r"\bthe\b")
+        for r in results:
+            haystack = f'{r["name"]} {r["description"]}'.lower()
+            self.assertRegex(haystack, word_re, r["path"])
+
+        substring_count = 0
+        for p in Path(team_ops._catalog_root()).rglob("*.md"):
+            fm = team_ops._frontmatter(p)
+            if not fm.get("name"):
+                continue
+            desc = team_ops._frontmatter_description(p.read_text()) or ""
+            if "the" in f'{fm["name"]} {desc}'.lower():
+                substring_count += 1
+        self.assertLess(len(results), substring_count)
+
+    def test_two_char_query_empty_with_suggestions_via_cli(self):
+        # Both query terms fall under the 3-char floor -> zero matches ->
+        # the CLI wrapper adds division-derived suggestions.
+        with tempfile.TemporaryDirectory() as td:
+            env = _env_with_registry(Path(td))
+            result = _run("search-candidates", "--query", "ai ml",
+                           "--source", "catalog", env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["results"], [])
+        self.assertGreater(len(payload["suggestions"]), 0)
 
 
 if __name__ == "__main__":

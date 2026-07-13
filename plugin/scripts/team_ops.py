@@ -774,24 +774,49 @@ def assemble_context(home: Path, wiki_root: Path, persona_file: Path) -> dict:
 # division = first directory component under the catalog root), and a
 # factory home's references/** pool (user-curated, recursive, frontmatter
 # files only). Scoring is deliberately simple and deterministic:
-# case-insensitive term overlap against name + description (+ `domain:`
-# tags where present — starter/references personas in full factory format
-# carry `domain:`; the vendored catalog does not). Ties break starter >
-# references > catalog (the user's own curated pools outrank the generic
-# catalog), then name.
+# case-insensitive UNIQUE-term overlap (query terms are case-folded and
+# deduped — repeating a term never inflates a score) matched at word
+# boundaries (\b-anchored, so "manage" does not hit "manager" and "the"
+# does not hit "theater"; whole-word, no stemming) against name +
+# description (+ `domain:` tags where present — starter/references
+# personas in full factory format carry `domain:`; the vendored catalog
+# does not). Stopword floor: terms shorter than _MIN_SEARCH_TERM_LEN chars
+# are dropped from scoring entirely. Ties break starter > references >
+# catalog (the user's own curated pools outrank the generic catalog), then
+# name.
 #
 # Catalog frontmatter is NOT factory format (no `domain:`, no fenced
 # anchors) — only `name:`/`description:` are guaranteed. `description:` is
-# read via `_frontmatter_description`, never the generic `_frontmatter`
-# reader above: `_frontmatter` cannot follow a folded/literal block scalar
-# (`description: >-` / `description: |`) and would hand back the bare
-# indicator string instead of the continuation text (see its docstring).
-# The live vendored catalog happens to use single-line descriptions today
-# (verified against the real files), but nothing guarantees that survives a
+# read via `_frontmatter_description` + `_unfold_block_scalar`, never the
+# generic `_frontmatter` reader above: `_frontmatter` cannot follow a
+# folded/literal block scalar (`description: >-` / `description: |`) at
+# all (see its docstring), and `_frontmatter_description` follows the
+# continuation but returns the raw indicator + newline-separated lines —
+# `_unfold_block_scalar` strips the indicator and joins the continuation
+# into one searchable line. The live vendored catalog happens to use
+# single-line descriptions today, but nothing guarantees that survives a
 # future re-sync, so every source reads description the robust way.
 
 _SOURCE_PRIORITY = {"starter": 0, "references": 1, "catalog": 2}
 SEARCH_SOURCES = ("starter", "catalog", "references")
+_MIN_SEARCH_TERM_LEN = 3  # stopword floor: shorter query terms never score
+_BLOCK_SCALAR_INDICATOR_RE = re.compile(r"^[>|][+-]?[ \t]*\n")
+
+
+def _unfold_block_scalar(value: str) -> str:
+    """Flatten a YAML block-scalar `description:` value into one line.
+
+    `_frontmatter_description` hands back a block scalar as the raw
+    indicator line plus its indented continuation (e.g.
+    ``'>-\\n  first line\\n  second line'``). Strip the indicator and join
+    the continuation lines with single spaces (folded semantics; literal
+    `|` scalars are flattened the same way — for search/display purposes
+    the line breaks carry no meaning). Values that don't start with a
+    block-scalar indicator are returned unchanged."""
+    if not _BLOCK_SCALAR_INDICATOR_RE.match(value):
+        return value
+    lines = (ln.strip() for ln in value.split("\n")[1:])
+    return " ".join(ln for ln in lines if ln)
 
 
 def _plugin_root() -> Path:
@@ -829,7 +854,7 @@ def _search_candidate(path: Path, source: str, division: str | None) -> dict | N
     name = fm.get("name")
     if not name:
         return None
-    description = _frontmatter_description(text) or ""
+    description = _unfold_block_scalar(_frontmatter_description(text) or "")
     domain = fm.get("domain", [])
     domain_tags = domain if isinstance(domain, list) else []
     return {
@@ -885,9 +910,14 @@ def search_candidates(query: str, home: Path | None, division: str | None,
     case-insensitively (a candidate with no division — e.g. a flat starter
     roster entry — never matches a division filter).
 
-    Returns only candidates with a nonzero term-overlap score, ranked by
-    score descending, then source priority (starter > references >
-    catalog), then name.
+    Scoring: the query is case-folded and split on whitespace into a SET
+    of unique terms (duplicates never inflate a score); terms shorter than
+    _MIN_SEARCH_TERM_LEN chars are dropped entirely (stopword floor); each
+    surviving term scores 1 when it appears as a whole word
+    (\\b-anchored regex — "manage" does not match "manager") in the
+    candidate's name + description + domain tags. Returns only candidates
+    with a nonzero score, ranked by score descending, then source priority
+    (starter > references > catalog), then name.
     """
     sources = SEARCH_SOURCES if source == "all" else (source,)
 
@@ -903,13 +933,15 @@ def search_candidates(query: str, home: Path | None, division: str | None,
         want = division.lower()
         candidates = [c for c in candidates if (c["division"] or "").lower() == want]
 
-    terms = [t for t in re.split(r"\s+", query.strip().lower()) if t]
+    terms = {t for t in re.split(r"\s+", query.strip().lower())
+             if len(t) >= _MIN_SEARCH_TERM_LEN}
+    term_res = [re.compile(rf"\b{re.escape(t)}\b") for t in terms]
 
     scored: list[dict] = []
     for c in candidates:
         haystack = " ".join(
             [c["name"], c["description"], " ".join(c["_domain_tags"])]).lower()
-        score = sum(1 for t in terms if t in haystack)
+        score = sum(1 for t_re in term_res if t_re.search(haystack))
         if score <= 0:
             continue
         entry = {k: v for k, v in c.items() if k != "_domain_tags"}

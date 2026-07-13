@@ -112,12 +112,27 @@ not delegated to `team_ops.py`.)
     slugs) — `source` is always `"user-turn"` per the jot's provenance rule.
     Lines from before persona classification existed simply lack the
     `personas` key; treat that the same as an empty list.
+  - Each valid line may also carry an optional `"wiki"` key (string) —
+    `jot_append`'s own documented provenance field: "the wiki/project this
+    call's observations concern" (session-close passes the resolved wiki
+    path when one resolved for that session). Lines from before wiki
+    provenance existed, or written during a factory-home-only session where
+    no wiki resolved, simply lack the key; treat that the same as **no
+    provenance recorded** — never guess a wiki for an unmarked line.
 
 Group the parsed observations:
 
 - **By persona slug** — a line with `"personas": ["wren", "marnie"]`
   contributes its observation to both `wren`'s and `marnie`'s groups (a
   session-close call can tag one observation with multiple personas).
+- **By wiki, within each persona group** — further subdivide each persona's
+  group by the literal `"wiki"` string value of its observations: one
+  sub-group per distinct value present, plus a **"no wiki recorded"**
+  sub-group for observations lacking the key. This sub-grouping is read-only
+  bookkeeping for Step 3's routing default below — it does not change what
+  counts as "at least one observation" for a persona group, and (unlike
+  "general / unassigned") it is not itself surfaced to the user as a
+  separate group to act on.
 - **Unclassified** — any line with no `personas` key (or an empty list) goes
   into its own **"general / unassigned"** group. Do not guess which persona
   an unclassified observation is about; show this group to the user as-is so
@@ -130,24 +145,61 @@ For every persona group from Step 2 with **at least one** observation
 (skip the "general / unassigned" group here — it has no single persona file
 to edit; just display it for the user's own judgment):
 
-1. Read `<factory-home>/agents/<slug>.md` in full.
-2. Draft a **minimal** edit to a non-fenced section — normally
+0. **Routing lookup, before drafting anything:**
+
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" list-copies "<slug>"
+   ```
+
+   Returns `{"copies": [{"wiki", "path", "forked", "drifted"}, ...]}` (plus
+   `"skipped"` when > 0 copy files were unreadable) — one entry per
+   registered wiki carrying a project-copy persona forked from this slug.
+   `"wiki"` is the registered wiki's path, verbatim; `"drifted"` is
+   tri-state (`true` / `false` / `null` — `null` means the comparison
+   couldn't be made, e.g. no recorded `base-hash`) and is only carried
+   forward here, not acted on. An empty `"copies"` list means no project
+   copies exist for this slug — routing is base-only, no question to ask.
+1. Read `<factory-home>/agents/<slug>.md` in full, and — if `list-copies`
+   returned any copies — read each copy's file too (its `"path"` field), so
+   a "both" proposal (below) can be drafted against each side's real current
+   text rather than assuming a copy still reads like the base.
+2. **Determine the routing default** from provenance, before drafting:
+   - No copies → default **base**, no question to surface.
+   - Copies exist → compare this persona's Step 2 wiki sub-groups against
+     the copies' `"wiki"` values:
+     - Every observation in this persona's group carries a `"wiki"` value
+       matching **exactly one** copy's `"wiki"` → default to **that copy**,
+       and quote the provenance reason back to the user, the spec's own
+       phrasing: *"this feedback came from sessions where the `<wiki>` copy
+       ran."*
+     - Observations split across the base (a "no wiki recorded" sub-group
+       present) and a copy, or across two different copies, or otherwise
+       don't cleanly point at one single copy → default to **both** (base
+       AND the implicated copy/copies) rather than silently guessing one.
+     - No observation in the group carries any wiki provenance at all, but
+       copies exist anyway → default **base**, but mention in the proposal
+       that copies exist so the user can redirect.
+3. Draft a **minimal** edit to a non-fenced section — normally
    `## Mutable Instructions`, but any section outside the
    `<!-- IMMUTABLE:BEGIN -->` / `<!-- IMMUTABLE:END -->` markers is fair
    game — that addresses the recurring feedback in that persona's
-   observation group. "Minimal" means: the smallest change that actually
+   observation group, against each file the routing default (or the user's
+   override) targets. "Minimal" means: the smallest change that actually
    resolves the pattern, not a rewrite of the file. **Never** draft a change
    inside the fenced Immutable Anchors block — that section cannot change,
    full stop. **Never** invent feedback that isn't present in an actual jot
    observation; every clause in the diff must trace back to something a
    real observation said.
-3. Present the proposal to the user as a **unified diff**, with the
+4. Present the proposal to the user as a **unified diff**, with the
    **verbatim triggering jot observation(s) quoted directly above the
    diff** — the spec's own phrase: "with the verbatim triggering feedback
-   attached." Example shape:
+   attached" — and, always, the routing question up front so the user never
+   has to recall which layer their feedback targets. Example shape:
 
    ```
    ### Proposal: <persona-name> (<slug>)
+
+   Routing: <base | the "<wiki>" copy | both — base and the "<wiki>" copy> (default from jot provenance; say which you'd rather target to change it)
 
    Triggering observation(s):
    > "<jot observation text, verbatim>"
@@ -160,9 +212,20 @@ to edit; just display it for the user's own judgment):
    +<added line>
    ```
 
+   **"Both" is two separately drafted diffs, never one patch applied
+   twice** — the copy may have diverged from the base since it forked, so
+   its diff is drafted fresh against ITS OWN current text, not mechanically
+   re-applied from the base diff. If the copy's equivalent section has
+   diverged so far that the base diff doesn't conceptually apply to it,
+   draft what actually fits the copy's current text and label that diff
+   **"adaptation, not a port"** in the gate presentation — never force-port
+   a base diff onto a copy whose relevant section no longer resembles it.
+
 **One proposal per persona per run** — if a persona's group has three
 observations, they inform a single combined diff, not three separate
-proposals.
+proposals. The one documented exception is "both" routing: that single
+persona's proposal carries two diffs (one per target file), each still
+gated independently in Step 4 ("the gate is per-diff, not per-run").
 
 ## Step 4 — Human gate
 
@@ -188,6 +251,17 @@ diff review's job, right here at this gate — read every diff, don't rubber
 stamp it because the guard will "catch it" downstream. It won't.
 
 ## Step 5 — Apply, verify, commit (approved proposals only)
+
+Each approved diff from Step 3 targets exactly one file — the base persona
+(`<factory-home>/agents/<slug>.md`) or one project copy (`<copy-path>`, from
+that persona's Step 3 `list-copies` result) — call it `<target-file>` below.
+Under "both" routing there are two approved diffs for the same persona, so
+this whole chain runs **twice, independently**, once per target file.
+Wherever steps 1, 2, and 4 below reference `<factory-home>/agents/<slug>.md`,
+that is `<target-file>` — the scratch-write, guard, and atomic-write
+mechanics are identical regardless of which file is being edited; only
+validation (step 3) and the commit destination (step 5) differ by layer,
+both called out explicitly where they occur.
 
 For each **approved** proposal, in order:
 
@@ -242,8 +316,18 @@ For each **approved** proposal, in order:
 3. Validate the scratch copy:
 
    ```bash
-   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" validate-persona "<scratch-path>"
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" validate-persona "<scratch-path>" [--project "<registry-basename>"]
    ```
+
+   **Project copies validate with `--project`:** when `<target-file>` is a
+   project copy, pass `--project` with that copy's `list-copies` `"wiki"`
+   value's own basename (`Path(copy["wiki"]).name`) — the same
+   registry-entry basename `validate-persona` derives internally
+   (`Path(entry["path"]).name`), **not** the wiki's `domain:` label, and the
+   match is case-sensitive; this is the same own-name exemption `/staff` and
+   `/team` pass for their project-copy validations, never re-derived some
+   other way here. A base-file target omits `--project` exactly as before —
+   the factory-home denylist is absolute, no exceptions.
 
    - **Exit 0** (`ok: true`) → clean; continue to step 4.
    - **Exit 1** (`ok: false`) → the edit broke something validate-persona
@@ -260,29 +344,77 @@ For each **approved** proposal, in order:
    ```bash
    cp "<scratch-path>" "<factory-home>/agents/<slug>.md.tmp" && mv "<factory-home>/agents/<slug>.md.tmp" "<factory-home>/agents/<slug>.md"
    ```
-5. Commit **this persona's edit alone** — one commit per approved persona
-   edit, so a single `git revert` can undo exactly one persona's change
-   without touching any other:
+5. Commit **this diff's edit alone** — one commit per approved diff, so a
+   single `git revert` can undo exactly one persona's (or one copy's) change
+   without touching any other. **The commit destination follows the file:**
 
-   ```bash
-   git -C "<factory-home>" add "agents/<slug>.md"
-   git -C "<factory-home>" commit -m "improve(<slug>): <one-line summary of the change>
+   - **Base target** → the factory-home repo, unchanged from before:
 
-   Triggering observation: \"<verbatim jot observation quoted in Step 3>\""
-   ```
+     ```bash
+     git -C "<factory-home>" add "agents/<slug>.md"
+     git -C "<factory-home>" commit -m "improve(<slug>): <one-line summary of the change>
 
-   Record the resulting commit SHA (`git -C "<factory-home>" rev-parse HEAD`)
-   for Step 6.
+     Triggering observation: \"<verbatim jot observation quoted in Step 3>\""
+     ```
+
+     Record the resulting commit SHA
+     (`git -C "<factory-home>" rev-parse HEAD`) for Step 6.
+   - **Project-copy target** → that copy's own project repo, never the
+     factory home. `<project-root>` is that copy's `list-copies` `"wiki"`
+     value (the registered wiki root path, verbatim). Confirm it's a git
+     repo first:
+
+     ```bash
+     git -C "<project-root>" rev-parse --git-dir
+     ```
+
+     - **Fails** (not a git repo) → the edit already landed on disk (step 4
+       above already wrote it) — this is not a STOP. Tell the user plainly
+       that the edit is **uncommitted**: `"<project-root>` is not a git
+       repo — the edit to `personas/<slug>.md` is on disk but not
+       committed; commit it yourself once the project has a repo."` Record
+       "uncommitted" (no SHA) for this diff in Step 6. Do not run `git init`
+       on the user's behalf here — that STOP-and-ask posture is reserved
+       for the factory home in Step 1, not something to silently fix on a
+       project `/improve` hasn't been asked to manage.
+     - **Succeeds** → commit exactly this copy's file, same
+       one-edit-per-commit discipline as the base path:
+
+       ```bash
+       git -C "<project-root>" add "personas/<slug>.md"
+       git -C "<project-root>" commit -m "improve(<slug>): <one-line summary of the change>
+
+       Triggering observation: \"<verbatim jot observation quoted in Step 3>\""
+       ```
+
+       Record the resulting commit SHA
+       (`git -C "<project-root>" rev-parse HEAD`) for Step 6.
+
+   **After an approved edit that targeted the base ONLY** (routing was
+   `base`, not `both`), when this persona's Step 3 `list-copies` result was
+   non-empty: remind the user, once, that the existing project copies did
+   **not** receive this edit — they will surface a `drift_notice` (the same
+   spawn-time backstop `/team` and `/staff` already show) the next time a
+   team resolves them, since the base's bytes just changed underneath them
+   with no corresponding `ack-fork`. This is disclosure only, not a gate —
+   it doesn't block or delay the commit just made.
 
 ## Step 6 — Bookkeeping
 
-End the run's output with:
+End the run's output with, **every tally below split by layer** (base vs.
+project-copy) — a "both"-routed persona contributes one count to each layer,
+since it drafted two independent diffs:
 
-- **Proposals made** — count from Step 3.
+- **Proposals made** — count from Step 3, base diffs / project-copy diffs.
 - **Approved** / **Rejected** / **Blocked by guard** (anchors-unchanged
-  exit ≠ 0, or validate-persona exit 1 or 2) — counts from Steps 4–5.
+  exit ≠ 0, or validate-persona exit 1 or 2) — counts from Steps 4–5, each
+  split base / project-copy.
 - **Commit SHAs** — one line per commit actually made in Step 5, persona
-  slug + SHA + subject.
+  slug + layer (base or the copy's project name) + SHA + subject; a
+  project-copy diff whose project root wasn't a git repo lists
+  "uncommitted" in place of a SHA (see Step 5).
+- **Drift reminders surfaced** — how many times Step 5's "base edited while
+  copies exist" reminder fired this run, one per affected persona.
 - **Unparseable jot lines skipped** — the count from Step 2, if any.
 - **General / unassigned observations** — how many were shown but not
   acted on this run (they remain in the jot for a future run to pick up).

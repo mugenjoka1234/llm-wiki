@@ -9,7 +9,9 @@ Maintained by Claude Code via the `llm-wiki` plugin.
 
 - `raw/` — source documents. Immutable. Claude reads but never modifies.
 - `wiki/` — all Claude-maintained content. Entity pages, digests, index, overview, log.
-- `_templates/` — 10 page templates. Claude copies from here when creating a page.
+  - `decision` pages — what was decided and why, with the trigger that would reopen it.
+  - `session` pages — session minutes and the positions agents took, alongside the log in `wiki/log/`.
+- `_templates/` — page templates. Claude copies from here when creating a page.
 - `scripts/lint.py` — deterministic lint + PII gate + `_health.md` regeneration.
 - `docs/schema-decisions.md` — ADR log for schema changes specific to this wiki.
 - `CLAUDE.md` — the rulebook. Claude reads this at session start.
@@ -19,6 +21,9 @@ Maintained by Claude Code via the `llm-wiki` plugin.
 - Drop a source into `raw/` and tell Claude "ingest `<filename>`"
 - Ask Claude "research X" — the plugin's research skill handles web fetch, citation, and ingest offer
 - Tell Claude "critique [[page]]" — the plugin's critique skill audits claims against sources or challenges with web research
+- Staff a team with `/staff`, then run it with `/team` — agents pre-read the relevant pages before acting
+- Close a session with `/session-close` — files the decisions made and positions taken back into the wiki
+- Refine personas with `/improve` as the team learns what works
 - Run `python3 scripts/lint.py` anytime for a health check
 
 ## Obsidian setup

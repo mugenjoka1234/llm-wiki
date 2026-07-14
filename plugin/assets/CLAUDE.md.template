@@ -11,9 +11,17 @@ This is the rulebook for the {{DOMAIN}} wiki. It turns Claude from a generic cha
 
 {{PURPOSE}}
 
-The wiki is **persistent external memory for agents and humans**. Every research session preserves source material at multiple levels of detail. Agents can navigate from high-level summaries down to verbatim source text without re-fetching anything from the web.
+This wiki is the project's **institutional memory** — the durable context the agent team (the factory) and its humans read before acting, and write back to when work is done. It holds three kinds of knowledge, equally:
+
+- **What we brought in** — research, ingested sources, external facts, with provenance and trust markup.
+- **What we decided and why** — options considered, what won, what was traded away, and the trigger that would reopen it.
+- **How the work was done** — the positions agents took, what shipped, what's still open — so the next task starts from what's known instead of re-deriving it.
+
+**Read it first, write to it last.** Every `/team` spawn pre-reads the relevant pages; every `/session-close` files decisions and positions back here. Nothing a future session needs should live only in a chat log.
 
 ## Three-tier storage model
+
+This tier model is how **brought-in source material** is stored; decisions and session records live in `decision`/`session` entity pages, not here.
 
 This wiki stores source material at three levels. Agents should choose the right tier for their task:
 
@@ -38,10 +46,11 @@ Within `raw/`:
 Before answering any question about {{DOMAIN}}, check the wiki:
 
 1. **TRIGGER** — Does the task involve a named entity, a claim needing sourcing, a comparison, or a gap? If yes, check. Skip only for purely mechanical tasks. Default posture: check first. False positive = 2 seconds. False negative = user trust.
-2. **ORIENT** — Read `wiki/index.md §Agent Catalog` only. Scan ✓/△/? prefixes. Note matching entities and ? gaps. Note open questions in the questions catalog section.
-3. **SELECT** — Pick 3–5 pages. Prefer ✓ over △. For "what do we know" → entity pages. For "latest research" → `digests/catalog.md`. For gaps → `questions/` pages. Cap at 15 total; one hop on `related:`/`sources:`.
-4. **CLASSIFY** — Know well (confidence:high, 0 open-Qs, <90d) · Know partially (confidence:med OR open-Qs OR stale) · Don't know (no matching pages).
-5. **ANSWER + BRIDGE** — Cite `[[wikilinks]]` for every non-obvious claim. For gaps: name the gap, share what IS known, list open-Qs verbatim, offer to research or file as a question page. Never speculate silently.
+2. **Before new work** — before starting new development or ideation, read the relevant `decision` pages and the most recent `session` pages so you build on what was already decided, not around it.
+3. **ORIENT** — Read `wiki/index.md §Agent Catalog` only. Scan ✓/△/? prefixes. Note matching entities and ? gaps. Note open questions in the questions catalog section.
+4. **SELECT** — Pick 3–5 pages. Prefer ✓ over △. For "what do we know" → entity pages. For "latest research" → `digests/catalog.md`. For gaps → `questions/` pages. Cap at 15 total; one hop on `related:`/`sources:`.
+5. **CLASSIFY** — Know well (confidence:high, 0 open-Qs, <90d) · Know partially (confidence:med OR open-Qs OR stale) · Don't know (no matching pages).
+6. **ANSWER + BRIDGE** — Cite `[[wikilinks]]` for every non-obvious claim. For gaps: name the gap, share what IS known, list open-Qs verbatim, offer to research or file as a question page. Never speculate silently.
 
 ---
 

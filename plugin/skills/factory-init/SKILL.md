@@ -65,8 +65,8 @@ If `--adopt` was passed, skip to the Adopt section below.
 
 Activate the `wiki-init` skill and follow its full workflow (pre-checks,
 pause-and-ask, scaffold, Obsidian setup, git init, registration). wiki-init
-always creates the wiki at `<cwd>/wiki/`; return here when it completes, with
-the wiki root at `<cwd>/wiki` and the domain label known.
+creates the wiki in a `<cwd>/<basename>-wiki/` container; return here when it
+completes, with the wiki root at `<cwd>/<basename>-wiki` and the domain label known.
 
 ## Step 3 — Declare docs_path
 
@@ -106,7 +106,7 @@ as stray markdown — e.g. `mockups`, app source dirs).
 Verify:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/resolve_wiki.py" --get-docs-path "$(pwd)/wiki"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/resolve_wiki.py" --get-docs-path "$(pwd)/$(basename "$(pwd)")-wiki"
 ```
 
 Expected: the absolute docs path prints.
@@ -139,7 +139,7 @@ dirs (same skip list the ingest flow uses — see Item 5 principle):
 ```bash
 find . \
   -type d \( -name .git -o -name node_modules -o -name dist -o -name build \
-             -o -name .superpowers -o -path ./wiki \) -prune -o \
+             -o -name .superpowers -o -path './*-wiki' \) -prune -o \
   -type f \( -name '*.md' -o -name '*.pdf' -o -name '*.txt' \) -print 2>/dev/null
 ```
 

@@ -5,7 +5,7 @@ description: Scaffold a new llm-wiki in the current directory. For full project 
 
 # wiki-init skill
 
-Scaffold a new wiki at `<cwd>/wiki/` with all templates, agents, lint script, git init, and registry registration. The folder is always `wiki/`; the domain *label* auto-derives from the cwd basename.
+Scaffold a new wiki in a `<cwd>/<basename>-wiki/` container with all templates, agents, lint script, git init, and registry registration. The container folder auto-derives as `<cwd-basename>-wiki` (no prompt); the domain *label* auto-derives from the cwd basename.
 
 ## Preflight
 
@@ -34,7 +34,7 @@ done
 
 ## Pause-and-ask
 
-The wiki folder is always `<cwd>/wiki/` — do not ask for it. The domain *label* (used only for display and `{{DOMAIN}}` substitution) auto-derives from the cwd basename. Prompt the user for three answers:
+The wiki container folder auto-derives as `<cwd>/<basename>-wiki/` — do not ask for it. The domain *label* (used only for display and `{{DOMAIN}}` substitution) auto-derives from the cwd basename. Prompt the user for three answers:
 
 1. **Purpose** — 1-2 sentences. Example: "Competitive intel and market research for product work."
 2. **Entity types** — offer the 9 defaults and ask if they want to customize: `competitor, initiative, jtbd, feature, segment, experiment, metric, decision, source` (plus `synthesis` which is reserved for index/overview/glossary/people/_health). Customization: add or remove entries from this list.
@@ -44,11 +44,11 @@ Confirm all answers before proceeding.
 
 ## Scaffold
 
-1. Derive the label and set the folder, then create the new wiki directory tree at `<cwd>/wiki/`:
+1. Derive the label and set the folder, then create the new wiki directory tree at `<cwd>/<basename>-wiki/`:
 
 ```bash
-domain="$(basename "$(pwd)")"   # label only — flows into {{DOMAIN}}; never a path
-wiki_root="wiki"                # the scaffold always lives at <cwd>/wiki/
+domain="$(basename "$(pwd)")"   # label — flows into {{DOMAIN}}
+wiki_root="${domain}-wiki"      # container folder, e.g. <cwd>/ai-grid-wiki/ — auto-derived, no prompt
 
 mkdir -p "$wiki_root"/{raw/{assets/screenshots,snapshots,_ingest,_scrubbed},wiki/{log,_pii,_drafts,_archive,digests,questions},_templates,docs,scripts/tests}
 touch "$wiki_root"/raw/assets/screenshots/.gitkeep

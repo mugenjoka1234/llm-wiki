@@ -126,12 +126,47 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" validate-persona "<member-fi
        disclose every one, always.
     6. If validation now passes → proceed to Step 3. If it still errors →
        fall through to the "any OTHER error" case below.
-  - If `errors` contains anything other than exactly `["missing description"]`
-    (e.g. `"missing citation anchor (CITATION_STANDARD)"`, a `"denylist: ..."`
-    hit, or an over-budget description) → **never spawn an invalid persona.**
-    Treat this member as MISSING for Step 4's panel roster, with the
-    validate-persona `errors` list as the reason. Do not attempt to fix these
-    errors automatically — they require a human edit to the persona file.
+  - If the ONLY refusal-grade error is the missing **standard** citation anchor
+    — `errors` is exactly `["missing citation anchor (CITATION_STANDARD)"]`, or
+    exactly that plus `"missing description"` (which is itself lazy-upgradable)
+    → OFFER to add the standard boilerplate anchor, with explicit user approval.
+    This is the only immutable-rule content the skill may add on its own; a
+    persona-SPECIFIC immutable rule is never authored here.
+    1. If `"missing description"` is also present, first run the
+       description lazy-upgrade above (draft + `upgrade-persona --description`,
+       with its disclosure line) so only the anchor remains.
+    2. Ask the user for one yes/no: may you add the standard citation anchor to
+       `<member-file>`? Note that `upgrade-persona` cannot add the anchor — it
+       only adds a description and fences an *existing* `## Immutable Anchors`
+       section — so this is a direct edit, and only the verbatim boilerplate
+       bullet from `${CLAUDE_PLUGIN_ROOT}/assets/factory-templates/persona.md`
+       may be added this way. Never invent or infer a persona-specific rule.
+    3. On yes, add this block to the file — paste it verbatim (heading, fence
+       markers, and the one bullet, exactly as the template ships it):
+       ```markdown
+       ## Immutable Anchors (cannot change)
+
+       <!-- IMMUTABLE:BEGIN -->
+
+       - **Always attribute claims.** Every statistic, number, behavioral assertion, or external fact must carry a source tag per `CITATION_STANDARD.md` (`[internal::file]`, `[internal::data]`, `[external::claude-knowledge]`, `[external::web-search]`, `[hypothesis]`, etc.). Unattributed claims are invalid outputs. Internal client metrics must specify the source file and whether the number is a target or a measured baseline. `[hypothesis]` tags must appear in the session's `open_items`.
+
+       <!-- IMMUTABLE:END -->
+       ```
+       If the file already has a `## Immutable Anchors` heading but no
+       CITATION_STANDARD bullet, add the bullet (and fence markers, if absent)
+       inside that existing section rather than duplicating the heading.
+    4. Re-run `validate-persona` on the same file, and disclose the write with a
+       diff-shaped summary line (same as the description upgrade). If it now
+       passes → proceed to Step 3. If it still errors → treat this member as
+       MISSING below.
+    5. On no (user declines) → treat this member as MISSING for Step 4's panel
+       roster, reason "missing citation anchor — declined auto-add."
+  - If `errors` contains anything else — a `"denylist: ..."` hit, an over-budget
+    description, or the citation-anchor error combined with any other error →
+    **never spawn an invalid persona.** Treat this member as MISSING for Step
+    4's panel roster, with the validate-persona `errors` list as the reason. Do
+    not attempt to fix these automatically — they require a human edit to the
+    persona file.
 
 ## Step 3 — Context assembly & spawn
 

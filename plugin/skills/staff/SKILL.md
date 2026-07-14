@@ -30,7 +30,7 @@ Interview, Resource triage / Adapt & hire, and Assemble).
 : "${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT is not set — is the plugin loaded?}"
 ```
 
-## Step 0 — Resolve factory home, resolve wiki (degrades), detect expansion mode
+## Step 0 — Resolve factory home, resolve wiki (degrades), detect project state
 
 **Factory home — hard requirement, same rule as `/team`:**
 
@@ -73,25 +73,42 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/resolve_wiki.py" --cwd "$(pwd)"
   will proceed base-only; client-flavored personas can't be split into a
   project copy until one resolves."*
 
-**Expansion-mode detection** (staffing an org that already has members):
+**Project-state detection — a NEW project, or expanding THIS project's team?**
+
+A populated factory home does **not** mean this project wants those personas.
+The maternity team is not the ai-grid team. Decide by looking for a team that
+already belongs to **this project** — not merely for personas that exist
+somewhere in the home:
 
 ```bash
-ls "<factory-home>/agents/"*.md 2>/dev/null
-ls "<factory-home>/teams/"*.yaml 2>/dev/null
+# A team scoped to THIS project? (project name = wiki_root basename, else cwd basename)
+proj="$(basename "${wiki_root:-$(pwd)}")"
+ls "<factory-home>/teams/${proj}"*.yaml 2>/dev/null
+# Project copies already living in this wiki?
+[ -n "$wiki_root" ] && ls "$wiki_root/personas/"*.md 2>/dev/null
 ```
 
-If any personas already exist, this is an **expansion**, not a cold start:
+- **Expansion — this project already has a team** (`teams/<project>*.yaml`
+  exists, or this wiki already holds project copies): Step 4's slate opens
+  **pre-seeded with THIS PROJECT's current members**, each marked **KEEP** —
+  you're adding to a team already chosen for this project. The boundary check
+  (doctrine principle 5, Step 4) runs across **old + new together**; the
+  collision check (Step 5) still guards slugs — an existing slug is never
+  overwritten (propose a variant or a project copy).
 
-- Step 4's slate opens **pre-seeded** with the existing roster, each row
-  marked **KEEP** — `/staff` never removes an existing member; it only adds
-  around what's there.
-- The boundary check (doctrine principle 5, Step 4) runs across
-  **old + new members together** — a new hire cannot duplicate an existing
-  member's deep lane either.
-- Every new hire's slug is checked against the existing roster before it is
-  proposed (see Step 5's collision check) — an existing slug is **never**
-  overwritten; the skill proposes a variant name (e.g. `<slug>-2`) or, when a
-  wiki resolved, a project-level copy instead.
+- **New project — cold start, even when the factory home is full:** no team
+  belongs to this project yet. **Do NOT pre-seed the home roster, and never
+  auto-KEEP a home persona.** The home's existing personas are **candidates,
+  not the team** — surface them in Step 4 only where they fit the interviewed
+  needs (via `search-candidates --source references`), exactly like
+  starter/catalog candidates. A home persona whose `domain:` tags or role are
+  foreign to this project's domain (Step 1 context + Step 2 intake) is
+  **flagged as a likely poor fit and left off the slate** unless the user
+  pulls it on deliberately. If the user signals the existing roster does not
+  fit, that settles it — compose fresh; never carry a persona the user has
+  said does not belong. On a cold start with a resolved wiki, hires default to
+  **project copies in the wiki** (Step 5's split), keeping the base home from
+  accreting project-specific personas.
 
 ## Step 1 — Context fetch (before asking anything)
 

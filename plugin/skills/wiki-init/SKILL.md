@@ -5,7 +5,7 @@ description: Scaffold a new llm-wiki in the current directory. For full project 
 
 # wiki-init skill
 
-Scaffold a new wiki at `<cwd>/<domain>/` with all templates, agents, lint script, git init, and registry registration.
+Scaffold a new wiki at `<cwd>/wiki/` with all templates, agents, lint script, git init, and registry registration. The folder is always `wiki/`; the domain *label* auto-derives from the cwd basename.
 
 ## Preflight
 
@@ -34,39 +34,41 @@ done
 
 ## Pause-and-ask
 
-Prompt the user for four answers:
+The wiki folder is always `<cwd>/wiki/` — do not ask for it. The domain *label* (used only for display and `{{DOMAIN}}` substitution) auto-derives from the cwd basename. Prompt the user for three answers:
 
-1. **Domain name** — pre-fill from cwd basename. Example: "research", "notes", "ai-learning".
-2. **Purpose** — 1-2 sentences. Example: "Competitive intel and market research for product work."
-3. **Entity types** — offer the 9 defaults and ask if they want to customize: `competitor, initiative, jtbd, feature, segment, experiment, metric, decision, source` (plus `synthesis` which is reserved for index/overview/glossary/people/_health). Customization: add or remove entries from this list.
-4. **Section-naming conventions** — offer the defaults and ask if they want to customize: `Strengths / Weaknesses` (for competitors), `Trade-offs accepted` (for decisions), `Pain points` (for JTBDs/segments), `Caveats & limitations` (for metrics).
+1. **Purpose** — 1-2 sentences. Example: "Competitive intel and market research for product work."
+2. **Entity types** — offer the 9 defaults and ask if they want to customize: `competitor, initiative, jtbd, feature, segment, experiment, metric, decision, source` (plus `synthesis` which is reserved for index/overview/glossary/people/_health). Customization: add or remove entries from this list.
+3. **Section-naming conventions** — offer the defaults and ask if they want to customize: `Strengths / Weaknesses` (for competitors), `Trade-offs accepted` (for decisions), `Pain points` (for JTBDs/segments), `Caveats & limitations` (for metrics).
 
 Confirm all answers before proceeding.
 
 ## Scaffold
 
-1. Create the new wiki directory tree at `<cwd>/<domain>/`:
+1. Derive the label and set the folder, then create the new wiki directory tree at `<cwd>/wiki/`:
 
 ```bash
-mkdir -p "$domain"/{raw/{assets/screenshots,snapshots,_ingest,_scrubbed},wiki/{log,_pii,_drafts,_archive,digests,questions},_templates,docs,scripts/tests}
-touch "$domain"/raw/assets/screenshots/.gitkeep
-touch "$domain"/raw/snapshots/.gitkeep
-touch "$domain"/raw/{_ingest,_scrubbed}/.gitkeep
-touch "$domain"/wiki/{_drafts,_archive,digests}/.gitkeep
+domain="$(basename "$(pwd)")"   # label only — flows into {{DOMAIN}}; never a path
+wiki_root="wiki"                # the scaffold always lives at <cwd>/wiki/
+
+mkdir -p "$wiki_root"/{raw/{assets/screenshots,snapshots,_ingest,_scrubbed},wiki/{log,_pii,_drafts,_archive,digests,questions},_templates,docs,scripts/tests}
+touch "$wiki_root"/raw/assets/screenshots/.gitkeep
+touch "$wiki_root"/raw/snapshots/.gitkeep
+touch "$wiki_root"/raw/{_ingest,_scrubbed}/.gitkeep
+touch "$wiki_root"/wiki/{_drafts,_archive,digests}/.gitkeep
 ```
 
 2. Copy all entity templates (currently 15 files — entity types, `index.md`/`overview.md`, `question.md`/`session.md`, and the stub templates wiki-ingest uses for un-typed pages):
 
 ```bash
-cp "${CLAUDE_PLUGIN_ROOT}/assets/entity-templates/"*.md "$domain/_templates/"
+cp "${CLAUDE_PLUGIN_ROOT}/assets/entity-templates/"*.md "$wiki_root/_templates/"
 ```
 
 3. Copy the bundled scripts:
 
 ```bash
-cp "${CLAUDE_PLUGIN_ROOT}/assets/scripts/lint.py" "$domain/scripts/lint.py"
-cp "${CLAUDE_PLUGIN_ROOT}/assets/scripts/capture_snapshots.py" "$domain/scripts/capture_snapshots.py"
-cp "${CLAUDE_PLUGIN_ROOT}/assets/scripts/graphify_wiki.py" "$domain/scripts/graphify_wiki.py"
+cp "${CLAUDE_PLUGIN_ROOT}/assets/scripts/lint.py" "$wiki_root/scripts/lint.py"
+cp "${CLAUDE_PLUGIN_ROOT}/assets/scripts/capture_snapshots.py" "$wiki_root/scripts/capture_snapshots.py"
+cp "${CLAUDE_PLUGIN_ROOT}/assets/scripts/graphify_wiki.py" "$wiki_root/scripts/graphify_wiki.py"
 ```
 
 4. Substitute placeholders using Python (handles multi-line values; sed cannot):
@@ -88,9 +90,9 @@ for tmpl_basename in CLAUDE.md README.md schema-decisions.md; do
     src="${CLAUDE_PLUGIN_ROOT}/assets/${tmpl_basename}.template"
     # schema-decisions.md goes under docs/
     if [ "$tmpl_basename" = "schema-decisions.md" ]; then
-        dst="$domain/docs/$tmpl_basename"
+        dst="$wiki_root/docs/$tmpl_basename"
     else
-        dst="$domain/$tmpl_basename"
+        dst="$wiki_root/$tmpl_basename"
     fi
     _SRC="$src" _DST="$dst" python3 -c "
 import os
@@ -112,7 +114,7 @@ with open(dst, 'w') as f:
 done
 unset _SRC _DST
 
-cp "${CLAUDE_PLUGIN_ROOT}/assets/gitignore.template" "$domain/.gitignore"
+cp "${CLAUDE_PLUGIN_ROOT}/assets/gitignore.template" "$wiki_root/.gitignore"
 
 # Write schema.yaml — machine-readable entity type declarations
 python3 -c "
@@ -125,7 +127,7 @@ for t in types.splitlines():
     if t:
         lines.append('  - ' + t)
 print('\n'.join(lines))
-" > "$domain/schema.yaml" || echo "schema.yaml generation failed, continuing"
+" > "$wiki_root/schema.yaml" || echo "schema.yaml generation failed, continuing"
 ```
 
 5. Write initial wiki skeleton files. Follow the patterns from the entity templates for each file's shape.
@@ -134,15 +136,15 @@ print('\n'.join(lines))
 
    **`wiki/index.md` and `wiki/overview.md` have real templates — start from
    them, don't author freehand.** Copy `_templates/index.md` and
-   `_templates/overview.md` (already present in `$domain/_templates/` from
+   `_templates/overview.md` (already present in `$wiki_root/_templates/` from
    step 2) into place, then fill in the placeholder title and replace the
    `TBD` frontmatter fields with real values the same way the log file does
    (`last-updated`/`as-of`: `${today}`; `quarter`: `${quarter}`; `confidence:
    high` — see "Confidence values" below):
 
    ```bash
-   cp "$domain/_templates/index.md"    "$domain/wiki/index.md"
-   cp "$domain/_templates/overview.md" "$domain/wiki/overview.md"
+   cp "$wiki_root/_templates/index.md"    "$wiki_root/wiki/index.md"
+   cp "$wiki_root/_templates/overview.md" "$wiki_root/wiki/overview.md"
    # then edit both: replace the {{...}} title placeholder and the TBD
    # frontmatter fields (last-updated, as-of, quarter, confidence) with real
    # values, and fill overview.md's "## Current theses" with real content.
@@ -159,7 +161,7 @@ print('\n'.join(lines))
 
    ```bash
    quarter=$(date +%Y-Q$(( ($(date +%-m) - 1) / 3 + 1 )))
-   cat > "$domain/wiki/log/${quarter}.md" << EOF
+   cat > "$wiki_root/wiki/log/${quarter}.md" << EOF
    ---
    type: synthesis
    status: active
@@ -198,7 +200,7 @@ print('\n'.join(lines))
 
    ```bash
    # Initialize digests/catalog.md stub (lint.py regenerates on first run)
-   cat > "$domain/wiki/digests/catalog.md" << EOF
+   cat > "$wiki_root/wiki/digests/catalog.md" << EOF
    ---
    type: synthesis
    status: active
@@ -217,7 +219,7 @@ print('\n'.join(lines))
    EOF
 
    # Initialize questions/catalog.md stub
-   cat > "$domain/wiki/questions/catalog.md" << EOF
+   cat > "$wiki_root/wiki/questions/catalog.md" << EOF
    ---
    type: synthesis
    status: active
@@ -253,25 +255,28 @@ If installed, ask the user: "Obsidian is installed. Set up the vault automatical
 On yes, run the full setup:
 
 ```bash
-abs_path="$(cd "$domain" && pwd)"
+abs_path="$(cd "$wiki_root" && pwd)"
 
 # Step 1: Copy Obsidian settings files
-mkdir -p "$domain/.obsidian/plugins/dataview"
-cp "${CLAUDE_PLUGIN_ROOT}/assets/obsidian-config/app.json"               "$domain/.obsidian/app.json"
-cp "${CLAUDE_PLUGIN_ROOT}/assets/obsidian-config/community-plugins.json" "$domain/.obsidian/community-plugins.json"
-cp "${CLAUDE_PLUGIN_ROOT}/assets/obsidian-config/core-plugins.json"      "$domain/.obsidian/core-plugins.json"
-cp "${CLAUDE_PLUGIN_ROOT}/assets/obsidian-config/hotkeys.json"           "$domain/.obsidian/hotkeys.json"
+mkdir -p "$wiki_root/.obsidian/plugins/dataview"
+cp "${CLAUDE_PLUGIN_ROOT}/assets/obsidian-config/app.json"               "$wiki_root/.obsidian/app.json"
+cp "${CLAUDE_PLUGIN_ROOT}/assets/obsidian-config/community-plugins.json" "$wiki_root/.obsidian/community-plugins.json"
+cp "${CLAUDE_PLUGIN_ROOT}/assets/obsidian-config/core-plugins.json"      "$wiki_root/.obsidian/core-plugins.json"
+cp "${CLAUDE_PLUGIN_ROOT}/assets/obsidian-config/hotkeys.json"           "$wiki_root/.obsidian/hotkeys.json"
 
 # Step 2: Download and install Dataview plugin directly (so it's ready, no install button needed)
 echo "Downloading Dataview plugin..."
 curl -sL "https://github.com/blacksmithgu/obsidian-dataview/releases/latest/download/main.js" \
-     -o "$domain/.obsidian/plugins/dataview/main.js"
+     -o "$wiki_root/.obsidian/plugins/dataview/main.js"
 curl -sL "https://github.com/blacksmithgu/obsidian-dataview/releases/latest/download/manifest.json" \
-     -o "$domain/.obsidian/plugins/dataview/manifest.json"
+     -o "$wiki_root/.obsidian/plugins/dataview/manifest.json"
 
-# Step 3: Open the vault in Obsidian
-# macOS: triggers "Open as vault?" dialog if new — user clicks one button and it's done
-open -a Obsidian "$abs_path"
+# Step 3: Open the NEW folder as a vault via Obsidian's URI scheme.
+# The URI opens THIS folder as a vault even when another vault is already open;
+# `open -a Obsidian <path>` only re-focuses whatever vault is already open.
+open "obsidian://open?path=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$abs_path")"
+# Fallback if the URI handler is unavailable:
+# open -a Obsidian "$abs_path"
 echo "Obsidian opening — click 'Open' if prompted to confirm the new vault."
 ```
 
@@ -283,7 +288,7 @@ If Obsidian is NOT installed, tell the user:
    history:
 
    ```bash
-   python3 "$domain/scripts/lint.py" --wiki-root "$domain"
+   python3 "$wiki_root/scripts/lint.py" --wiki-root "$wiki_root"
    ```
 
    Expected: `OK: N pages, no issues.` and exit 0. If it exits non-zero, this
@@ -294,7 +299,7 @@ If Obsidian is NOT installed, tell the user:
 7. Initialize git and commit:
 
 ```bash
-cd "$domain"
+cd "$wiki_root"
 git init -b main
 git add .
 git commit -m "scaffold: $domain wiki (via llm-wiki plugin)"
@@ -304,7 +309,7 @@ cd ..
 8. Register in registry:
 
 ```bash
-abs_path="$(cd "$domain" && pwd)"
+abs_path="$(cd "$wiki_root" && pwd)"
 registry="${CLAUDE_PLUGIN_DATA:-.}/registry.txt"
 mkdir -p "$(dirname "$registry")"
 echo "${abs_path}|${domain}|${today}|${today}" >> "$registry"
@@ -318,16 +323,16 @@ If called with `--parent <parent-path>` flag:
 
 2. Run the link subcommand:
    ```bash
-   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/resolve_wiki.py" link "$(pwd)/$domain" "<parent-path>"
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/resolve_wiki.py" link "$(pwd)/$wiki_root" "<parent-path>"
    ```
 
 3. Create the subdomains directory in the child wiki:
    ```bash
-   mkdir -p "$domain/wiki/subdomains"
-   touch "$domain/wiki/subdomains/.gitkeep"
+   mkdir -p "$wiki_root/wiki/subdomains"
+   touch "$wiki_root/wiki/subdomains/.gitkeep"
    ```
 
-4. Add a `## Sub-domains` section to `<domain>/wiki/index.md`:
+4. Add a `## Sub-domains` section to `wiki/wiki/index.md`:
    ```markdown
    ## Sub-domains
    | Sub-wiki | Domain | Last ingested | Top entities |
@@ -342,7 +347,7 @@ If called with `--parent <parent-path>` flag:
 After successful scaffold, tell the user:
 
 - Wiki created at `<abs-path>`
-- Next steps: `cd <domain>` then start using `/llm-wiki:research <topic>`, `/llm-wiki:analyze <file>`, etc.
+- Next steps: `cd wiki` then start using `/llm-wiki:research <topic>`, `/llm-wiki:analyze <file>`, etc.
 
 ## Error handling
 

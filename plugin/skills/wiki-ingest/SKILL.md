@@ -22,6 +22,30 @@ description: Ingest a raw source file into the wiki — runs the PII gate, produ
 
 If user passed a raw file path, verify it exists under `<wiki>/raw/`. If no path passed, scan `<wiki>/raw/MANIFEST.md` for `pending-ingest` entries and list them for the user to pick.
 
+### Scope & the opt-in ignore principle
+
+When handed a set of candidate sources (e.g. from the factory-init sweep, a
+directory, or several `pending-ingest` entries), apply this principle instead of
+interrogating the user upfront about what to include or exclude:
+
+- **Nothing outside the wiki is ever modified.** Files outside `wiki/` are
+  read-only source — read them, never edit them.
+- **Ingest what's relevant by default; IGNORE is opt-in.** Do NOT ask the user
+  to define an ignore list upfront. Only skip something when (a) the user
+  explicitly says "ignore these," or (b) it is clearly sensitive or clearly
+  noise.
+- **Recognize obvious noise and skip-with-a-note** — do not pose it as a choice.
+  Process/build logs (`.superpowers/`, `.git/`, `node_modules/`, `dist/`,
+  `build/`, raw `.diff` files with no extractable claims, per-task engineering
+  logs) are skipped by default with a one-line note, e.g.:
+
+  > skipping `.superpowers/sdd` — process logs, not wiki content — say so if you want them
+
+- **Only ASK when genuinely ambiguous, or when something reads as sensitive.**
+  In the sensitive case, name what you spotted and ask to confirm skipping (a
+  yes/no), rather than posing an open multi-choice question. The two-stage PII
+  gate below is separate and always runs regardless.
+
 ### PII gate (CRITICAL — must include --wiki-root)
 
 ```bash

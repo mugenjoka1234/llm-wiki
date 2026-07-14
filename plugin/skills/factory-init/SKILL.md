@@ -64,8 +64,9 @@ still works; warn that `/team` and `/improve` will be unavailable until register
 If `--adopt` was passed, skip to the Adopt section below.
 
 Activate the `wiki-init` skill and follow its full workflow (pre-checks,
-pause-and-ask, scaffold, Obsidian setup, git init, registration). Return here
-when it completes with `<domain>` known.
+pause-and-ask, scaffold, Obsidian setup, git init, registration). wiki-init
+always creates the wiki at `<cwd>/wiki/`; return here when it completes, with
+the wiki root at `<cwd>/wiki` and the domain label known.
 
 ## Step 3 — Declare docs_path
 
@@ -83,10 +84,10 @@ somewhere outside the project.
 
 ## Step 4 — Write the Project config block
 
-Append to `<domain>/CLAUDE.md` (skip if a `## Project config` section already exists):
+Append to `wiki/CLAUDE.md` (skip if a `## Project config` section already exists):
 
 ```bash
-cat >> "<domain>/CLAUDE.md" << 'EOF'
+cat >> "wiki/CLAUDE.md" << 'EOF'
 
 ## Project config
 
@@ -105,7 +106,7 @@ as stray markdown — e.g. `mockups`, app source dirs).
 Verify:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/resolve_wiki.py" --get-docs-path "$(pwd)/<domain>"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/resolve_wiki.py" --get-docs-path "$(pwd)/wiki"
 ```
 
 Expected: the absolute docs path prints.
@@ -128,7 +129,33 @@ default_team: my-product-team
 Do NOT spawn anything — team spawning is the `/team` skill (Phase 3). This is
 a recorded preference only.
 
-## Step 6 — Confirm
+## Step 6 — Offer to ingest existing project docs
+
+Now that the wiki exists and the factory home is resolved, look for source
+material already in the project that the wiki should probably know about. Scan
+for markdown / PDF / text **outside** the new `wiki/` and outside obvious noise
+dirs (same skip list the ingest flow uses — see Item 5 principle):
+
+```bash
+find . \
+  -type d \( -name .git -o -name node_modules -o -name dist -o -name build \
+             -o -name .superpowers -o -path ./wiki \) -prune -o \
+  -type f \( -name '*.md' -o -name '*.pdf' -o -name '*.txt' \) -print 2>/dev/null
+```
+
+If the scan finds nothing, say so in one line and move on. If it finds files,
+make ONE offer (same spirit as the empty-roster `/staff` offer above) and wait
+for a yes:
+
+> Found N existing docs in this project (e.g. `brief.md`, `notes/plan.md`). Want
+> me to ingest them into the wiki? `/wiki-ingest` runs the PII gate and files
+> each one — nothing outside `wiki/` is ever modified.
+
+Never auto-ingest. On yes, hand the file list to `/wiki-ingest` (do not ingest
+here yourself); it applies the noise skip-with-a-note and PII gate per source.
+On no, drop it — the user can ingest anytime later.
+
+## Step 7 — Confirm
 
 Report to the user: wiki path, docs_path (absolute), factory home status,
 default team (or none). Remind: drop any source file into `raw/` anytime with
@@ -186,4 +213,8 @@ buried in new errors it was never written against. Schema errors (missing
 required fields, invalid `type`/`status`/`confidence` values) are never
 grandfathered — those are exit-2 regardless.
 
-7. **Confirm** — same report as scaffold Step 6, plus the lint summary.
+7. **Offer to ingest existing docs** — same as scaffold Step 6 (scan for
+   markdown/PDF/text outside the wiki and the noise dirs; make one offer; never
+   auto-ingest; hand any yes to `/wiki-ingest`).
+
+8. **Confirm** — same report as scaffold Step 7, plus the lint summary.

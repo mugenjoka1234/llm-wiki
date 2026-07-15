@@ -76,7 +76,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/resolve_wiki.py" --cwd "$(pwd)"
 **Project-state detection — a NEW project, or expanding THIS project's team?**
 
 A populated factory home does **not** mean this project wants those personas.
-The maternity team is not the ai-grid team. Decide by looking for a team that
+A billing team is not an analytics team. Decide by looking for a team that
 already belongs to **this project** — not merely for personas that exist
 somewhere in the home:
 

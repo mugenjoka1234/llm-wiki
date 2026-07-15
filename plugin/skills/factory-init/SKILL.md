@@ -84,10 +84,10 @@ somewhere outside the project.
 
 ## Step 4 — Write the Project config block
 
-Append to `wiki/CLAUDE.md` (skip if a `## Project config` section already exists):
+Append to `<basename>-wiki/CLAUDE.md` (skip if a `## Project config` section already exists):
 
 ```bash
-cat >> "wiki/CLAUDE.md" << 'EOF'
+cat >> "$(basename "$(pwd)")-wiki/CLAUDE.md" << 'EOF'
 
 ## Project config
 

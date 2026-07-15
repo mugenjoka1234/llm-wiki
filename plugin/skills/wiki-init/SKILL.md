@@ -332,7 +332,7 @@ If called with `--parent <parent-path>` flag:
    touch "$wiki_root/wiki/subdomains/.gitkeep"
    ```
 
-4. Add a `## Sub-domains` section to `wiki/wiki/index.md`:
+4. Add a `## Sub-domains` section to `$wiki_root/wiki/index.md`:
    ```markdown
    ## Sub-domains
    | Sub-wiki | Domain | Last ingested | Top entities |
@@ -347,7 +347,7 @@ If called with `--parent <parent-path>` flag:
 After successful scaffold, tell the user:
 
 - Wiki created at `<abs-path>`
-- Next steps: `cd wiki` then start using `/llm-wiki:research <topic>`, `/llm-wiki:analyze <file>`, etc.
+- Next steps: `cd <basename>-wiki` then start using `/llm-wiki:research <topic>`, `/llm-wiki:analyze <file>`, etc.
 
 ## Error handling
 

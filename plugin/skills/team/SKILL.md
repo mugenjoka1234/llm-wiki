@@ -54,6 +54,42 @@ Branch on `status`:
   Tell the user to run `resolve_wiki.py register-factory-home <path>` and
   retry.
 
+### Route the request before any single-persona work
+
+`/team` has an open front door, and it is easy to funnel the user into a
+single hire when they wanted a whole team. A **bare `/team`**, a `<name>`
+that matches no `teams/*.yaml`, or a natural-language "help me staff / recruit
+/ build a team for this project" is **NOT** a single-hire request. In these
+cases do **not** drop into Step 7's single-persona draft, and do **not** ask a
+question scoped to one named persona — that hides the multi-member path, which
+is exactly the trap to avoid. Instead, see what already exists and present the
+fork explicitly:
+
+```bash
+ls "<factory-home>/teams/"*.yaml 2>/dev/null   # what teams already exist
+```
+
+Offer these choices (as an explicit pick, one message) and let the user
+decide — never pre-select one for them:
+
+- **Run an existing team** — offered only when the list above is non-empty;
+  show the team names, and on a pick continue to team resolution below.
+- **Build a whole team (guided)** — the right door for a new project, or any
+  time the user wants more than one member. Hand off to the `/staff` skill: it
+  runs the context-first interview (including the focused-3–5 / full-bench-
+  up-to-9 team-size question) and proposes a multi-member slate the user
+  edits. State this plainly — the user must never have to already know
+  `/staff` exists to find the multi-member path.
+- **Hire one individual** — a single role for a single task → Step 7 (Recruit).
+- **Something else / not sure** — ask one open question about what they want
+  the team to do, then re-route into one of the above.
+
+Skip the fork only when the invocation unambiguously names an existing team
+(`/team <name>` with a matching `teams/<name>.yaml`), a single persona
+(`/team solo …` or a name addressed directly), or a single role+task
+(`/team recruit …`) — then go straight to the matching step. When in doubt,
+show the fork; it is never wrong to ask which of these the user meant.
+
 For the `/team <name>` form, resolve the team's roster, passing the
 Preflight-resolved wiki root so any project-layer persona copy supersedes its
 factory-home base for this run:
@@ -308,6 +344,12 @@ Same pipeline, single member, no team YAML and no synthesis step:
 ## Step 7 — Recruit
 
 Trigger: `/team recruit <role> for <task>`.
+
+**Confirm this is a single hire before drafting.** Recruit produces exactly
+**one** persona. If the user is staffing a new project from scratch, wants more
+than one member, or is unsure how many, do not proceed here — hand off to the
+`/staff` skill (guided interview + multi-member slate), the whole-team door.
+Only continue below once a single role for a single task is settled.
 
 1. **Source material.** Search the factory home's own curated pool first,
    then the vendored catalog second — the same references-before-catalog

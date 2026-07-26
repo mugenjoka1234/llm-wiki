@@ -242,10 +242,20 @@ identity has to live in the dispatch prompt itself, verbatim):
 4. **Two fixed instructions, included verbatim in every single dispatch, no
    paraphrasing:**
 
-   The attribution contract:
+   The reporting contract:
 
    ```
-   End your output with a section `## Position (self-authored)` — 2-4 sentences in your own voice stating your position, dissent included. This exact text is what future sessions will quote as YOUR prior position; never leave it to the orchestrator to summarize you.
+   Structure your entire response in these five parts, in this order, whatever your role — the parts are fixed; fill each in your own voice with what your lens produced:
+
+   1. **Bottom line** — one sentence: your answer or verdict. Lead with it.
+   2. **What I looked at** — the slice of the question you owned, one line.
+   3. **What I found** — your substantive result, concrete (the number, the fact, the decision) and the key evidence for it. Not a narration of your process.
+   4. **Why it matters** — what your finding changes for the user's decision, and the cost of ignoring it. Write this for a reader who does NOT share your context: translate it, don't assume it.
+   5. **My call** — your recommendation; your confidence (high / medium / low) AND what specifically you are unsure about (distinguish confidence in the mechanism from confidence in the numbers); and the alternative you weighed and set aside ("none" only if there genuinely was none).
+
+   Cover your own lens only. Do not synthesize across the panel, restate the whole problem, or speak for other members — synthesis is the orchestrator's job, not yours.
+
+   Then end with a section titled `## Position (self-authored)` — one paragraph (2-4 sentences) distilling the five parts above, bottom line first, into something that stands on its own when quoted out of context months from now. This block is what future sessions quote verbatim as YOUR prior position; never leave it to the orchestrator to summarize you, and never make it a raw dump of the report above.
    ```
 
    Before composing the deliverable-stub instruction, resolve the project's
@@ -300,18 +310,32 @@ called out, never quietly presented as if it were the whole team's view.
 
 ## Step 5 — Synthesis
 
-After the panel roster, the orchestrator synthesizes across the spawned
-members' outputs:
+After the panel roster, the orchestrator produces a **reader-first synthesis
+in this fixed order — a synthesis, not a transcript.** Attribution integrity
+is preserved, but it lives BELOW the synthesis, not AS it.
 
-- Pull out agreements, disagreements, and open questions across the panel.
-- **Every member's `## Position (self-authored)` block is carried into the
-  synthesis output VERBATIM** — copy the text exactly as the sub-agent wrote
-  it, under that member's name. This is attribution integrity: the
-  orchestrator never paraphrases a persona's position on their behalf: it
-  only ever quotes it.
-- On any contested point, name the specific personas on each side (e.g. "Wren
-  and Marnie disagree on X — Wren: ...; Marnie: ...") — never "some members
-  felt X."
+1. **Bottom line** (2–4 sentences, plain language, attributed to no one) —
+   what the panel concluded and the decision it points the user to. Roll up
+   the members' "Why it matters" and "My call" into one answer written for
+   the reader, not a list of who-said-what.
+2. **The crux** — the load-bearing disagreement(s) or risk(s) that actually
+   change the user's decision: **1–3 normally, up to 5** when there are
+   genuinely that many independent ones — never padded to a number, never
+   more than five (if you have more, they are not all load-bearing; group
+   them). Name the specific personas on each side and what each holds (e.g.
+   "Wren and Marnie disagree on X — Wren: ...; Marnie: ..."). If the panel
+   genuinely agreed, say so in one line and move on — a manufactured split is
+   as unhelpful as a hidden one.
+3. **What this means for you / what to decide next** — the concrete next
+   decision or action, with any blocking item called out.
+4. **Attributed detail** — every spawned member's `## Position
+   (self-authored)` block, VERBATIM, under their name. Copy each exactly as
+   the sub-agent wrote it; the orchestrator never paraphrases a persona's
+   position on their behalf, it only ever quotes it. This is the audit layer
+   beneath the synthesis, for the reader who wants each lens in full.
+
+On any contested point in parts 2–4, name the specific personas — never "some
+members felt X."
 
 ## Step 6 — Solo invocation
 

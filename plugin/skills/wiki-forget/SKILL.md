@@ -8,7 +8,7 @@ description: Remove a wiki from the plugin registry. Does NOT delete any files â
 ## Preflight
 
 ```bash
-: "${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT is not set â€” is the plugin loaded via --plugin-dir or installed in a marketplace?}"
+[ -d "${CLAUDE_PLUGIN_ROOT}/scripts" ] || { echo "llm-wiki plugin scripts not found (is the plugin installed and loaded?)"; exit 1; }
 ```
 
 ## Flow

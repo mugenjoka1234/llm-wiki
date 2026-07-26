@@ -37,7 +37,7 @@ than discovering one from a working directory.
 ## Preflight
 
 ```bash
-: "${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT is not set — is the plugin loaded?}"
+[ -d "${CLAUDE_PLUGIN_ROOT}/scripts" ] || { echo "llm-wiki plugin scripts not found (is the plugin installed and loaded?)"; exit 1; }
 ```
 
 ## Step 0 — Resolve & session ID
@@ -227,7 +227,7 @@ questions page from
 for that theme.
 
 When the target questions page **already exists**, add the new sub-question entry via
-`python3 "$CLAUDE_PLUGIN_ROOT/scripts/session_ops.py" append-once "<questions-page>" --marker "<!-- session: <ID> -->" --heading "## Sub-questions" --text "..."` 
+`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/session_ops.py" append-once "<questions-page>" --marker "<!-- session: <ID> -->" --heading "## Sub-questions" --text "..."` 
 with the session marker embedded in the text — never a bare edit. This construction
 prevents a crash-and-retry from duplicating the entry; only brand-new question pages
 are plain create-if-missing.

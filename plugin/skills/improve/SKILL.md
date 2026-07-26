@@ -27,7 +27,7 @@ always."**
 ## Preflight
 
 ```bash
-: "${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT is not set — is the plugin loaded?}"
+[ -d "${CLAUDE_PLUGIN_ROOT}/scripts" ] || { echo "llm-wiki plugin scripts not found (is the plugin installed and loaded?)"; exit 1; }
 ```
 
 `/improve` operates entirely on the factory home (personas + pattern jot) —

@@ -26,7 +26,7 @@ Three invocation forms:
 ## Preflight
 
 ```bash
-: "${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT is not set — is the plugin loaded?}"
+[ -d "${CLAUDE_PLUGIN_ROOT}/scripts" ] || { echo "llm-wiki plugin scripts not found (is the plugin installed and loaded?)"; exit 1; }
 ```
 
 Resolve the project wiki the same way every other skill does — it supplies
@@ -272,7 +272,7 @@ identity has to live in the dispatch prompt itself, verbatim):
    ```
 
    Before composing the deliverable-stub instruction, resolve the project's
-   docs_path: `python3 "$CLAUDE_PLUGIN_ROOT/scripts/resolve_wiki.py"
+   docs_path: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/resolve_wiki.py"
    --get-docs-path "<wiki-root>"` and include the resolved path in every
    dispatch so the sub-agent knows where deliverables (and their stubs'
    `external-ref:`) go; if unset/absent, say so in the dispatch and tell the

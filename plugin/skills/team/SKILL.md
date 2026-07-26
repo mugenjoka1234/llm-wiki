@@ -116,6 +116,42 @@ Members whose team-YAML entry has `invocation` starting with `on-demand` are
 **not spawned by default** — set them aside and list them to the user at the
 end as available (see Step 3).
 
+## Step 1.5 — Right-size the panel to the question (effort scaling)
+
+A team run spawns one subagent per member and costs on the order of **15× a
+single response**; models also tend to over-spend effort when left to judge it
+themselves. So before lazy-upgrading and spawning, match the panel to the
+question rather than reflexively spawning the whole active roster.
+
+Read the question against each active member's lane — their `role`, `domain:`
+tags, and the "defers on" boundaries in their persona — and pick the smallest
+panel that still covers the question's real decision surface:
+
+- **One lane → one member.** A question squarely inside a single member's deep
+  lane (and outside everyone else's) runs as a solo dispatch of that member —
+  chosen because the others have nothing to add, not to save effort for its own
+  sake.
+- **A few lanes → those members.** A question touching two or three lanes runs
+  just those members.
+- **Cross-cutting decision → the full active panel.** A go/no-go, a strategy
+  call, or a design that genuinely spans economics + UX + feasibility + risk
+  runs every active member — that is what the panel is for.
+- **When unsure, run wider.** Under-scoping silently loses a lens the user
+  staffed for, which is the worse failure; on genuine ambiguity, err toward the
+  fuller panel.
+
+**Disclose the choice and make it reversible — this is not optional.** State
+which members you are running and which you are holding for this question, and
+why (the lanes the question touches). A held member is a *scoping choice the
+user can see and reverse in one step* — "say the word to bring in <held
+members>" — never a silent omission. On-demand members set aside in Step 1 are
+held the same way and listed alongside. If the user's phrasing signals they
+want the whole team ("get everyone's take"), skip scaling and run the full
+active panel.
+
+Everything downstream — Step 2 lazy upgrade, Step 3 spawn — applies only to the
+members this step selected.
+
 ## Step 2 — Lazy upgrade (per member, before first spawn)
 
 Run once for every member about to be spawned this run (default members
@@ -342,6 +378,11 @@ panel roster**:
   you read the team YAML: `resolve-team`'s `missing` payload carries only
   `agent` + `role`, so `note` is only available by reading
   `teams/<name>.yaml` directly) — so the gap is legible, not just named.
+- **Held (not needed for this question):** every active or on-demand member
+  deliberately not spawned per Step 1.5's scaling — name, role, the one-line
+  reason (outside the question's lane / on-demand), and "available on request."
+  A held member is a **scoping choice, not a gap** — keep it visually distinct
+  from Missing so a deliberate scope-down never reads as a failure.
 
 Spec rule, held to verbatim: synthesis "names missing members and what they
 were expected to cover — never presents a partial panel as complete." A team

@@ -256,6 +256,19 @@ identity has to live in the dispatch prompt itself, verbatim):
    Cover your own lens only. Do not synthesize across the panel, restate the whole problem, or speak for other members — synthesis is the orchestrator's job, not yours.
 
    Then end with a section titled `## Position (self-authored)` — one paragraph (2-4 sentences) distilling the five parts above, bottom line first, into something that stands on its own when quoted out of context months from now. This block is what future sessions quote verbatim as YOUR prior position; never leave it to the orchestrator to summarize you, and never make it a raw dump of the report above.
+
+   Finally, after the Position block, append this machine-readable summary exactly — each value on ONE physical line. It is validated before your report is used: a missing field, an empty value, or a `confidence` outside high/medium/low sends the task straight back to you.
+
+   <!-- REPORT:BEGIN -->
+   bottom_line: "<part 1 — your one-sentence answer>"
+   scope: "<part 2 — the slice you owned>"
+   found: "<part 3 — your finding + the key evidence>"
+   why: "<part 4 — what it changes for the decision>"
+   call: "<part 5 — your recommendation>"
+   confidence: high|medium|low
+   confidence_basis: "<what you are sure vs unsure about>"
+   dissent: "<the alternative you weighed; 'none' if there genuinely was none>"
+   <!-- REPORT:END -->
    ```
 
    Before composing the deliverable-stub instruction, resolve the project's
@@ -279,6 +292,31 @@ At the end of the run, list any on-demand members that were set aside in Step
 1 and not spawned: name, role, and how to invoke them (`/team solo <name>
 <question>`).
 
+## Step 3.5 — Validate each returned report (gate before synthesis)
+
+Each spawned member ends its output with a `## Position` block and a fenced
+`<!-- REPORT:BEGIN -->…<!-- REPORT:END -->` summary. Before synthesizing,
+validate that summary — this is what makes the five-part shape a guarantee
+rather than a hope. For each returned output, write it verbatim to a temp file
+and run:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/team_ops.py" validate-report "<temp-file>"
+```
+
+- **Exit 0** (`ok: true`) → the report is well-formed; carry on.
+- **Exit 1** (`ok: false`) → re-dispatch THAT ONE member once, identical to the
+  first dispatch except append the returned `errors` and: "resend your full
+  response including a corrected `<!-- REPORT:BEGIN -->…<!-- REPORT:END -->`
+  block." This is a **single bounded retry** — never loop.
+- If the retry still fails (or the member errored, or again returned no block),
+  treat that member as **malformed report** for Step 4's roster, reason = the
+  `validate-report` errors. Never synthesize an unvalidated member — the same
+  discipline as Step 2 never spawning an invalid persona.
+
+The gate is disclosure, not silent repair: if any member needed a retry or
+landed as malformed, surface it in the roster.
+
 ## Step 4 — Partial failure (panel roster, always first)
 
 Before any synthesis content, the orchestrator's output **must open with a
@@ -296,8 +334,10 @@ panel roster**:
   they may have expected.
 - **Missing:** every member that did not run, each with name, role, and why —
   one of: persona file absent (from `resolve-team`'s `missing` list),
-  validation error (from Step 2, with the actual error text), or spawn
-  failure (the Agent tool call itself errored). For each missing member, also
+  validation error (from Step 2, with the actual error text), spawn
+  failure (the Agent tool call itself errored), or **malformed report** (from
+  Step 3.5, with the `validate-report` errors — the member ran but its report
+  failed the gate twice). For each missing member, also
   state **what they were expected to cover** — their `role` (and `note`, if
   you read the team YAML: `resolve-team`'s `missing` payload carries only
   `agent` + `role`, so `note` is only available by reading
@@ -360,10 +400,14 @@ Same pipeline, single member, no team YAML and no synthesis step:
    pass it when `"layer": "project"`, omit it when `"layer": "factory"`.
 3. Run Step 3's `assemble-context` and dispatch, with the question as the
    task. Same two verbatim instructions apply.
-4. Return the sub-agent's output as-is, including its `## Position
+4. Run the Step 3.5 gate on the returned output (`validate-report`), with the
+   same single bounded retry — a solo answer is held to the same reporting
+   contract as a panel member.
+5. Return the sub-agent's output as-is, including its `## Position
    (self-authored)` section — no panel roster needed for a single member, but
-   if that one member failed validation or the dispatch itself failed, say so
-   plainly instead of silently answering as a generic assistant.
+   if that one member failed validation, its report stayed malformed after the
+   retry, or the dispatch itself failed, say so plainly instead of silently
+   answering as a generic assistant.
 
 ## Step 7 — Recruit
 

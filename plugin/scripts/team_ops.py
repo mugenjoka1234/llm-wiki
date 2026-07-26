@@ -562,6 +562,89 @@ def validate_persona(path: Path, denylist: list[str], project: str | None = None
     return {"ok": not errors, "errors": errors, "warnings": warnings}
 
 
+# --- worker report block: the schema-enforced /team reporting contract (Tier 3) ---
+REPORT_BEGIN = "<!-- REPORT:BEGIN -->"
+REPORT_END = "<!-- REPORT:END -->"
+REPORT_REQUIRED_FIELDS = (
+    "bottom_line", "scope", "found", "why", "call",
+    "confidence", "confidence_basis", "dissent",
+)
+REPORT_CONFIDENCE_VALUES = ("high", "medium", "low")
+REPORT_BOTTOM_LINE_MAX = 320
+REPORT_FIELD_MAX = 1500
+
+_REPORT_FENCE_RE = re.compile(
+    re.escape(REPORT_BEGIN) + r"(.*?)" + re.escape(REPORT_END), re.DOTALL)
+_REPORT_FIELD_RE = re.compile(r"^\s*([a-z_]+)\s*:\s*(.*?)\s*$")
+
+
+def parse_report_block(text: str) -> dict | None:
+    """Extract the fenced worker-report block into a {field: value} dict.
+
+    Returns None when no `REPORT:BEGIN`/`REPORT:END` fence is present. Each
+    field is one physical line, `key: value`; one surrounding pair of matching
+    quotes is stripped. A later duplicate key wins (last line wins), mirroring
+    a plain re-declaration. Lines that are not `key: value` (blank lines,
+    stray prose) are ignored, so the block tolerates light formatting.
+    """
+    m = _REPORT_FENCE_RE.search(text)
+    if m is None:
+        return None
+    fields: dict[str, str] = {}
+    for line in m.group(1).splitlines():
+        fm = _REPORT_FIELD_RE.match(line)
+        if fm is not None:
+            fields[fm.group(1)] = _unquote(fm.group(2))
+    return fields
+
+
+def validate_report(path: Path) -> dict:
+    """Validate a worker's fenced report block against the reporting contract.
+
+    Returns {"ok": bool, "errors": [...], "fields": {...}}.
+
+    Errors (refusal-grade): no REPORT fence at all; any required field missing
+    or empty; `confidence` outside {high, medium, low}; `bottom_line` over
+    REPORT_BOTTOM_LINE_MAX chars; any other field over REPORT_FIELD_MAX chars.
+    The gate is the orchestrator's, not this function's: a non-ok result tells
+    the caller to re-dispatch that one worker, exactly as validate_persona's
+    non-ok result blocks a spawn.
+    """
+    text = path.read_text()
+    fields = parse_report_block(text)
+    if fields is None:
+        return {
+            "ok": False, "fields": {},
+            "errors": [f"missing REPORT block (expected {REPORT_BEGIN} … {REPORT_END})"],
+        }
+
+    errors: list[str] = []
+    for key in REPORT_REQUIRED_FIELDS:
+        if key not in fields:
+            errors.append(f"missing field: {key}")
+        elif not fields[key].strip():
+            errors.append(f"empty field: {key}")
+
+    confidence = fields.get("confidence", "").strip().lower()
+    if confidence and confidence not in REPORT_CONFIDENCE_VALUES:
+        errors.append(
+            "confidence must be one of high/medium/low "
+            f"(got '{fields['confidence']}')")
+
+    bottom_line = fields.get("bottom_line", "")
+    if len(bottom_line) > REPORT_BOTTOM_LINE_MAX:
+        errors.append(
+            f"bottom_line exceeds {REPORT_BOTTOM_LINE_MAX} chars ({len(bottom_line)})")
+    for key in REPORT_REQUIRED_FIELDS:
+        if key == "bottom_line":
+            continue
+        value = fields.get(key, "")
+        if len(value) > REPORT_FIELD_MAX:
+            errors.append(f"{key} exceeds {REPORT_FIELD_MAX} chars ({len(value)})")
+
+    return {"ok": not errors, "errors": errors, "fields": fields}
+
+
 _MARKDOWN_HEADING_RE = re.compile(r"^#{1,6} .*", re.MULTILINE)
 
 
@@ -1370,6 +1453,17 @@ def _cmd_validate_persona(path_str: str, project: str | None = None) -> int:
     return 0 if result["ok"] else 1
 
 
+def _cmd_validate_report(path_str: str) -> int:
+    path = Path(path_str)
+    if not path.is_file():
+        print(json.dumps({"ok": False, "fields": {},
+                          "errors": [f"report file not found: {path}"]}))
+        return 2
+    result = validate_report(path)
+    print(json.dumps(result))
+    return 0 if result["ok"] else 1
+
+
 def _cmd_upgrade_persona(path_str: str, description: str | None) -> int:
     path = Path(path_str)
     if not path.is_file():
@@ -1560,6 +1654,12 @@ def main(argv: list[str] | None = None) -> int:
         "--project", default=None,
         help="This project's own registry-basename: exempted from the denylist for this call.")
 
+    validate_report_p = subparsers.add_parser(
+        "validate-report",
+        help="Validate a worker's fenced report block (the reporting contract).")
+    validate_report_p.add_argument(
+        "path", help="Path to a file containing the worker's returned output.")
+
     upgrade_p = subparsers.add_parser(
         "upgrade-persona",
         help="Idempotently upgrade a persona file (add description, fence anchors).")
@@ -1602,6 +1702,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_list_copies(args.slug)
     if args.subcommand == "validate-persona":
         return _cmd_validate_persona(args.path, args.project)
+    if args.subcommand == "validate-report":
+        return _cmd_validate_report(args.path)
     if args.subcommand == "upgrade-persona":
         return _cmd_upgrade_persona(args.path, args.description)
     if args.subcommand == "assemble-context":

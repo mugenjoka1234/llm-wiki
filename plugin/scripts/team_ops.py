@@ -570,7 +570,7 @@ REPORT_REQUIRED_FIELDS = (
     "confidence", "confidence_basis", "dissent",
 )
 REPORT_CONFIDENCE_VALUES = ("high", "medium", "low")
-REPORT_BOTTOM_LINE_MAX = 320
+REPORT_BOTTOM_LINE_MAX = 500
 REPORT_FIELD_MAX = 1500
 
 _REPORT_FENCE_RE = re.compile(

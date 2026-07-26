@@ -90,10 +90,26 @@ class TestValidateReport(unittest.TestCase):
                     _write(td, build_output({"confidence": value})))
                 self.assertTrue(result["ok"], f"{value}: {result['errors']}")
 
+    def test_rich_bottom_line_within_budget_passes(self):
+        # A dense two-clause exec bottom line (~400 chars) must pass — the
+        # 320-char ceiling wrongly rejected real output from a live /team run.
+        rich = (
+            "The economics are sound and the honesty is real, but the piece is "
+            "paced like a personal essay, not an executive artifact: it buries its "
+            "one actionable finding under three tables of 'doesn't matter,' and it "
+            "currently treats its central proof as settled even though the wiki "
+            "records the author has not yet cleared that derivation for publication.")
+        self.assertGreater(len(rich), 320)
+        self.assertLess(len(rich), team_ops.REPORT_BOTTOM_LINE_MAX)
+        with tempfile.TemporaryDirectory() as td:
+            result = team_ops.validate_report(
+                _write(td, build_output({"bottom_line": rich})))
+            self.assertTrue(result["ok"], result["errors"])
+
     def test_bottom_line_over_budget_is_error(self):
         with tempfile.TemporaryDirectory() as td:
             result = team_ops.validate_report(
-                _write(td, build_output({"bottom_line": "x" * 400})))
+                _write(td, build_output({"bottom_line": "x" * 600})))
             self.assertFalse(result["ok"])
             self.assertTrue(any("bottom_line exceeds" in e for e in result["errors"]),
                             result["errors"])

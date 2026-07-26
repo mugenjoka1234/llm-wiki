@@ -245,9 +245,11 @@ generic catalog.
 
 Propose a slate as a table with these columns:
 
-| Role | Source | Doctrine principle | Intake answer | Evidence style | Active / on-demand |
-|---|---|---|---|---|---|
+| Name | Role | Source | Doctrine principle | Intake answer | Evidence style | Active / on-demand |
+|---|---|---|---|---|---|---|
 
+- **Name** — the candidate's name (from `search-candidates`, or the name you
+  would give a freshly-drafted hire).
 - **Source** — `starter` / `catalog` / `references`, plus the candidate's
   `path` from `search-candidates`.
 - **Doctrine principle** — which of the 7 principles above this hire
@@ -256,15 +258,31 @@ Propose a slate as a table with these columns:
 - **Evidence style** — numbers-first / user-first / precedent-first.
 - **Active / on-demand** — per doctrine 6 and intake item 7's team-size answer.
 
+**Legibility gate — profile every member before asking anything (required).**
+The table columns are shorthand, and a name alone gives the user nothing to
+judge. Immediately below the table, write a one-to-two-sentence plain-language
+profile for **each** proposed member: who they are and, concretely, what they
+would own on this team and which decision or gap (intake item) they cover —
+in the user's own domain language, not doctrine jargon. On a full-bench slate
+that means all nine profiles are on screen before any approval question is
+asked. Never present the slate as bare names, and never ask "does this look
+right?" until every member's profile is visible in the message.
+
 **Boundary check**, before showing the table to the user: no two members
 (old + new, in expansion mode) claim the same deep lane; every "defers on"
 target is either on the slate or is the user themself. **Single-style
 check**: if the Evidence-style column shows only one style across the whole
 slate, flag it explicitly and propose a swap before asking for approval.
 
-The user edits the slate (add, remove, swap roles) before anything is
-fetched or written — this table is the gate for Step 5, not a preview of a
-done deal.
+**Then, and only then, ask for approval.** With the table and every member's
+profile already rendered in the message above it, ask one approval-or-edit
+question about the slate as a whole (add / remove / swap / adjust size). The
+context the user needs lives in that visible message, never hidden inside the
+question widget: do not fragment the approval into one yes/no per candidate,
+and do not put a member's only description inside a question option's label.
+The user edits the slate (add, remove, swap roles) before anything is fetched
+or written — this table plus its profiles is the gate for Step 5, not a
+preview of a done deal.
 
 ## Step 5 — Source & adapt, then hire
 

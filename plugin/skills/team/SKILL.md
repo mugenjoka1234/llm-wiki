@@ -389,34 +389,46 @@ were expected to cover — never presents a partial panel as complete." A team
 run with 2 of 5 members missing is reported as a 3-member panel with 2 gaps
 called out, never quietly presented as if it were the whole team's view.
 
-## Step 5 — Synthesis
+## Step 5 — Synthesis (for the user: action-first and concrete)
 
-After the panel roster, the orchestrator produces a **reader-first synthesis
-in this fixed order — a synthesis, not a transcript.** Attribution integrity
-is preserved, but it lives BELOW the synthesis, not AS it.
+The synthesis exists to make the panel's work **actionable for the user** — not
+a transcript, and not a birds-eye abstract. The failure mode to avoid is a "big
+ball of text": every lens quoted in full, pitched high, with no clear
+recommendation the user can act on. Your job as orchestrator is to **decide and
+recommend**, grounded in what the panel found. Lead with what to DO, keep every
+claim concrete, and compress the individual takes. Fixed order:
 
-1. **Bottom line** (2–4 sentences, plain language, attributed to no one) —
-   what the panel concluded and the decision it points the user to. Roll up
-   the members' "Why it matters" and "My call" into one answer written for
-   the reader, not a list of who-said-what.
-2. **The crux** — the load-bearing disagreement(s) or risk(s) that actually
-   change the user's decision: **1–3 normally, up to 5** when there are
-   genuinely that many independent ones — never padded to a number, never
-   more than five (if you have more, they are not all load-bearing; group
-   them). Name the specific personas on each side and what each holds (e.g.
-   "Wren and Marnie disagree on X — Wren: ...; Marnie: ..."). If the panel
-   genuinely agreed, say so in one line and move on — a manufactured split is
-   as unhelpful as a hidden one.
-3. **What this means for you / what to decide next** — the concrete next
-   decision or action, with any blocking item called out.
-4. **Attributed detail** — every spawned member's `## Position
-   (self-authored)` block, VERBATIM, under their name. Copy each exactly as
-   the sub-agent wrote it; the orchestrator never paraphrases a persona's
-   position on their behalf, it only ever quotes it. This is the audit layer
-   beneath the synthesis, for the reader who wants each lens in full.
+1. **Recommended next steps — the headline, and your own call.** The concrete,
+   ordered action the panel's work points to: 2–5 specific steps, each naming
+   the actual thing — the file, the number, the lever, the owner — not a
+   category. ("Tighten the guardrail" is fluff; "raise the ceiling check from
+   15% to 20% in `pnl.html:1073`, then re-verify at ARR=$500M" is a step.) Take
+   a position — "do X, then Y; I'd hold Z" — and if the panel split, recommend
+   the path AND name what would change your recommendation. This is the first
+   thing the user reads.
+2. **Why — the bottom line, concrete.** 2–4 sentences grounded in specifics (the
+   actual figure, the named threshold, the `file:line`), never abstractions.
+   Litmus test: if a sentence could be pasted into any other project's review
+   unchanged, it is fluff — replace it with the specific fact from the panel's
+   output.
+3. **The crux — only if there is one.** The single load-bearing disagreement or
+   risk that would change the recommendation, stated concretely, with the
+   specific personas on each side (e.g. "Rowan and Sloane split on the 2.0×
+   threshold — Rowan: …; Sloane: …"): **1–3, up to 5**, never padded, never a
+   manufactured split. If the panel agreed, say so in one line and skip this.
+4. **The takes — compressed, not a wall.** ONE line per member: their name +
+   their headline position, so the user sees who contributed what without
+   reading six verbatim blocks. The full self-authored positions are **not
+   discarded** — session-close writes each `## Position` block verbatim to the
+   record, and you offer them in full on request ("say the word for the full
+   individual takes"). The one-liner is a reading aid pointing at a preserved
+   verbatim position; never overwrite a persona's self-authored position with
+   your summary.
 
-On any contested point in parts 2–4, name the specific personas — never "some
-members felt X."
+**Concreteness gate (parts 1–3):** every claim names a specific number, file,
+lever, or action. A synthesis that could describe any project has failed — go
+back to the panel's outputs and pull the specifics. Name specific personas on
+any contested point — never "some members felt X."
 
 ## Step 6 — Solo invocation
 

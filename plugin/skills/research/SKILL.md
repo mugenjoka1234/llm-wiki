@@ -1,6 +1,6 @@
 ---
 name: research
-description: Research a topic using web sources. Runs a three-stage pipeline — a Haiku planner finds URLs, a no-LLM fetcher stores clean markdown snapshots once, and the Sonnet reader synthesizes from the saved files with URL citations — then saves findings to raw/ and offers to ingest into the wiki. Supports --fetcher free|firecrawl. Use when the user says "research X", "look up Y", "find out about Z", "what's the latest on X", "investigate X", "answer the open questions on [[page]]", or "deep dive on X" (deep dive → passes --deep, raising the round cap).
+description: Research a topic from web sources — plan → fetch once → synthesize, with URL citations saved to raw/ and offered for wiki ingestion. Supports --fetcher free|firecrawl and --deep. Use when the user says "research X", "look up Y", "find out about Z", "what's the latest on X", "investigate X", "answer the open questions on [[page]]", or "deep dive on X" (→ --deep). For a question the wiki likely already covers, prefer the query skill; use research for genuinely new external lookups.
 ---
 
 # research skill
@@ -143,7 +143,15 @@ markdown --redact-pii`.
      ```bash
      echo "${wiki_path}|${domain}|${created}|${today}" >> "${CLAUDE_PLUGIN_DATA}/registry.txt"
      ```
-   - Present a summary of the research and ask: "Ingest now, or hold for review?" If yes, invoke the `/llm-wiki:wiki-ingest` skill (full name — NOT `llm-wiki:ingest`) with the raw file path and `--auto` flag.
+   - Present a summary of the research and ask: "Ingest now, or hold for review?"
+     If yes, invoke the `/llm-wiki:wiki-ingest` skill (full name — NOT
+     `llm-wiki:ingest`) via the Skill tool, and **pass the resolved wiki path as
+     well as the raw file** so `--auto` can honor its "path passed in, skip
+     resolution" contract. Args, exactly:
+     `--auto --wiki "$wiki_path" "$wiki_path/raw/research-<slug>-<today>.md"`.
+     The `--wiki` value is load-bearing: wiki-ingest's `--auto` mode skips its own
+     resolution and its PII gate reads `"$wiki_path/scripts/lint.py"` — omit
+     `--wiki` and the chain lands with no wiki path and fails at the gate.
 
 ## Error handling
 

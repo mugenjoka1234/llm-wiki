@@ -15,8 +15,16 @@ description: Ingest a raw source file into the wiki — runs the PII gate, produ
 
 ### Resolve or inherit target wiki
 
-1. If called with `--auto` flag (chained from research/analyze): target wiki path is passed in; skip resolution.
-2. Otherwise: `resolve_wiki.py --cwd "$(pwd)"`. If source `none` → error. If ambiguous → present options.
+1. If called with `--auto` (chained from research/analyze): the caller passes the
+   target wiki as `--wiki <path>` and the raw file as a path argument. Parse
+   `--wiki` into `$wiki_path` and skip resolution — every later step
+   (`"$wiki_path/scripts/lint.py"`, digest/entity writes) depends on that value.
+   **Defensive fallback:** if `--auto` is set but `--wiki` is missing (a partial
+   handoff from an older caller), do NOT fail — fall through to resolution
+   (step 2) from the raw file's own directory or cwd, and note that the caller
+   omitted `--wiki`. `--auto` only governs the interactive skips (takeaways,
+   stub-offer) below; it must never leave `$wiki_path` unset.
+2. Otherwise (no `--auto`): `resolve_wiki.py --cwd "$(pwd)"`. If source `none` → error. If ambiguous → present options.
 
 ### Verify input
 

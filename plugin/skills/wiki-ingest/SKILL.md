@@ -72,7 +72,7 @@ Read `<wiki>/CLAUDE.md` § Ingest workflow. Execute step-by-step:
 2. Discuss takeaways with user (skip in --auto mode).
 3. Write digest at `<wiki>/wiki/digests/<slug>.md` from `<wiki>/_templates/source.md` template.
    **CRITICAL — digest Summary guidance:**
-   - For **research output files** (`raw/research-*.md`): Summary = 2 sentences describing SCOPE AND PURPOSE only — NOT a content summary. The raw file contains the full findings; the digest is navigation. Example: "Playwright research session covering Square and Lightspeed reporting features, May 2026. Answers 4 open questions on competitive reporting capabilities."
+   - For **research / analysis output files** (`raw/research-*.md`, `raw/analysis-*.md`): Summary = 2 sentences describing SCOPE AND PURPOSE only — NOT a content summary. The raw file contains the full findings; the digest is navigation. Example: "Playwright research session covering Square and Lightspeed reporting features, May 2026. Answers 4 open questions on competitive reporting capabilities."
    - For **web clips and articles**: Summary = 2 sentences on what the source says — these are short enough that a brief summary adds value.
    - For **any source**: Key claims section is where the substantive content lives, with `→ [[entity-page]]` destinations. The raw file is the source of truth — the digest connects raw content to the wiki graph.
    - **Do NOT reproduce the full research content in the digest.** If you find yourself writing more than 4-5 bullet points in Key claims, you are over-summarizing. Extract the highest-signal claims that connect to entity pages; leave the rest in the raw file.

@@ -1,6 +1,6 @@
 {
   "name": "llm-wiki",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "description": "A persistent markdown wiki plus an AI-factory layer (budgeted persona teams, idempotent session close, human-gated self-improvement) for Claude Code.",
   "author": {
     "name": "Pranay Agrawal"

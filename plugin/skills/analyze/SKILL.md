@@ -45,11 +45,30 @@ Before analyzing a file, check if the wiki already has an entity page for the su
 
 6. Validate output (`--agent analyst`). Handle 0/1/2 branches same as research skill.
 
-7. Offer to the user:
-   - File as a new digest: `<wiki>/wiki/digests/analysis-<slug>-<date>.md`
-   - Append findings to the target page's Open Questions (if target is a wiki page)
-   - Both
-   - Save to scratch (print raw, don't file)
+7. **Offer to file the analysis — filing always goes through ingestion so it
+   compounds, exactly like a research output.** Ask the user which:
+
+   - **File into the wiki (compounds).** Write the analysis findings to
+     `<wiki>/raw/analysis-<slug>-<today>.md` with the Write tool (include a
+     `## Sources` section if the analysis cited anything). Append a MANIFEST
+     entry, then invoke `/llm-wiki:wiki-ingest` (via the Skill tool, full name —
+     NOT `llm-wiki:ingest`) with
+     `--auto --wiki "$wiki_path" "$wiki_path/raw/analysis-<slug>-<today>.md"`.
+     Ingestion writes the digest, appends the catalog, **back-propagates to the
+     related entity pages**, and logs it — the same compounding path a research
+     output takes.
+     ```bash
+     echo "- [ ] \`analysis-${slug}-${today}.md\` — Analysis output • public • pending-ingest" >> "$wiki_path/raw/MANIFEST.md"
+     ```
+     **Do NOT hand-write a bare `wiki/digests/analysis-*.md` yourself** — that
+     orphaned the analysis (no catalog entry, no entity enrichment, no log).
+     Ingestion is the single filing path so analyze and research compound
+     identically.
+   - **Append to the target page's Open Questions** (only when the target is a
+     wiki page) — a lighter action for when you just want the open questions
+     surfaced on that one page, not a filed digest.
+   - **Both** — file into the wiki and append open questions to the target page.
+   - **Save to scratch** — print the analysis, file nothing (the ephemeral case).
 
 ## Error handling
 

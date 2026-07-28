@@ -368,7 +368,9 @@ If called with `--parent <parent-path>` flag:
 
 ## Report
 
-After successful scaffold, tell the user:
+**Standalone only — skip this entire section when chained from factory-init**
+(factory-init continues with docs_path, team selection, and ingest, and writes
+the final report itself). When wiki-init was invoked directly, tell the user:
 
 - Wiki created at `<abs-path>`
 - Next steps: `cd <basename>-wiki` then start using `/llm-wiki:research <topic>`, `/llm-wiki:analyze <file>`, etc.

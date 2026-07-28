@@ -1,6 +1,6 @@
 ---
 name: wiki-ingest
-description: Ingest a raw source file into the wiki — runs the PII gate, produces a digest, updates entity pages, appends log. Use when the user says "ingest this", "add this file to the wiki", "there's a new doc in raw/", "process this source", or when chained automatically from research/analyze. Supports --auto mode when chained.
+description: Ingest a raw source file into the wiki — runs the PII gate, produces a digest, updates entity pages, appends log. Use when the user says "ingest this", "add this file to the wiki", "there's a new doc in raw/", "process this source", or when chained from research (or offered by factory-init / staff / session-close for existing docs). Supports --auto mode when chained.
 ---
 
 # wiki-ingest skill
@@ -76,7 +76,7 @@ Read `<wiki>/CLAUDE.md` § Ingest workflow. Execute step-by-step:
    - For **web clips and articles**: Summary = 2 sentences on what the source says — these are short enough that a brief summary adds value.
    - For **any source**: Key claims section is where the substantive content lives, with `→ [[entity-page]]` destinations. The raw file is the source of truth — the digest connects raw content to the wiki graph.
    - **Do NOT reproduce the full research content in the digest.** If you find yourself writing more than 4-5 bullet points in Key claims, you are over-summarizing. Extract the highest-signal claims that connect to entity pages; leave the rest in the raw file.
-5a. **Append digest to `wiki/digests/catalog.md`.**
+4. **Append digest to `wiki/digests/catalog.md`.**
 
     Add one line:
     ```
@@ -84,7 +84,7 @@ Read `<wiki>/CLAUDE.md` § Ingest workflow. Execute step-by-step:
     ```
     If `wiki/digests/catalog.md` does not exist, create it with standard synthesis frontmatter first. lint.py will regenerate the full file on the next lint run.
 
-4. **Capture raw page snapshots** (for research files — do this with Bash, not a loop):
+5. **Capture raw page snapshots** (for research files — do this with Bash, not a loop):
 
    ```bash
    cd "$wiki_path"
@@ -97,7 +97,7 @@ Read `<wiki>/CLAUDE.md` § Ingest workflow. Execute step-by-step:
    Failures are logged but don't block the ingest. Skip this step for non-research sources
    (web clips, PDFs) — the raw file itself is the verbatim source for those.
 
-4b. **Stub-page offer** — check if any entity page in the plan already exists in a registered parent/sibling wiki:
+6. **Stub-page offer** — check if any entity page in the plan already exists in a registered parent/sibling wiki:
 
    For each NEW entity page being created (not an update):
    - Check if a page with the same slug exists in registered parent or sibling wikis
@@ -115,7 +115,7 @@ Read `<wiki>/CLAUDE.md` § Ingest workflow. Execute step-by-step:
 
    Skip this step in `--auto` mode.
 
-5. **Back-propagate to entity pages (CRITICAL — this is what makes the wiki compound):**
+7. **Back-propagate to entity pages (CRITICAL — this is what makes the wiki compound):**
 
    After writing the digest, parse the `related:` list from the new digest's frontmatter. For each slug listed:
 
@@ -144,7 +144,7 @@ Read `<wiki>/CLAUDE.md` § Ingest workflow. Execute step-by-step:
 
    After completing all entity updates, run `python3 "$wiki_path/scripts/lint.py"` and then compile the graph with `/llm-wiki:graphify-wiki` to verify no warnings remain.
 
-6a. **Write `summary:` when creating or updating an entity page.**
+8. **Write `summary:` when creating or updating an entity page.**
 
     Format rule: answer-preview, not bibliographic.
     - ❌ `"Shopify competitor analysis"` — says what the document is
@@ -161,7 +161,7 @@ Read `<wiki>/CLAUDE.md` § Ingest workflow. Execute step-by-step:
 
     If the entity page already has a `summary:` field, update it only if this ingest adds significant new information. Keep it under one line.
 
-6b. **Offer to extract new `- [ ]` checkboxes into the questions/ folder.**
+9. **Offer to extract new `- [ ]` checkboxes into the questions/ folder.**
 
     After updating entity pages, scan updated pages for new unchecked `- [ ]` items in `## Open questions` sections. If any exist, offer:
 
@@ -179,18 +179,18 @@ Read `<wiki>/CLAUDE.md` § Ingest workflow. Execute step-by-step:
     3. Answer updates 3+ entity pages across types
     4. Another page needs to cite this specific answer (needs a wikilink)
 
-6. Append log entry to `<wiki>/wiki/log/<current-quarter>.md`.
-7. Update MANIFEST: change `- [ ]` to `- [x]`, replace `pending-ingest` tail with `ingested YYYY-MM-DD → wiki/digests/<slug>.md`.
-8. Delete the plan file.
-9. **Auto-lint** (always, even in --auto mode):
+10. Append log entry to `<wiki>/wiki/log/<current-quarter>.md`.
+11. Update MANIFEST: change `- [ ]` to `- [x]`, replace `pending-ingest` tail with `ingested YYYY-MM-DD → wiki/digests/<slug>.md`.
+12. Delete the plan file.
+13. **Auto-lint** (always, even in --auto mode):
    ```bash
    python3 "$wiki_path/scripts/lint.py" 2>&1
    ```
    - Exit 0: report "Wiki healthy — N pages, no issues."
-   - Exit 1 (warnings): surface the warnings inline. If UNACKNOWLEDGED DIGESTS appear, that means step 5 was incomplete — go back and finish the back-propagation before proceeding.
+   - Exit 1 (warnings): surface the warnings inline. If UNACKNOWLEDGED DIGESTS appear, that means step 7 (back-propagation) was incomplete — go back and finish the back-propagation before proceeding.
    - Exit 2 (schema errors): surface errors and halt.
 
-10. **Fan-out to parent wiki** (best-effort, non-blocking):
+14. **Fan-out to parent wiki** (best-effort, non-blocking):
 
     Check the registry for this wiki's parent field:
     ```bash
@@ -228,7 +228,7 @@ Read `<wiki>/CLAUDE.md` § Ingest workflow. Execute step-by-step:
 
     If no parent registered (empty string): skip silently.
 
-11. Report summary.
+15. Report summary.
 
 ### MANIFEST line editing
 

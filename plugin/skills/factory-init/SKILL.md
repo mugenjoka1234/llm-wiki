@@ -63,10 +63,14 @@ still works; warn that `/team` and `/improve` will be unavailable until register
 
 If `--adopt` was passed, skip to the Adopt section below.
 
-Activate the `wiki-init` skill and follow its full workflow (pre-checks,
-pause-and-ask, scaffold, Obsidian setup, git init, registration). wiki-init
-creates the wiki in a `<cwd>/<basename>-wiki/` container; return here when it
-completes, with the wiki root at `<cwd>/<basename>-wiki` and the domain label known.
+Invoke the `wiki-init` skill (via the Skill tool) and follow its full workflow
+(pre-checks, pause-and-ask, scaffold, Obsidian setup, git init, registration).
+wiki-init creates the wiki in a `<cwd>/<basename>-wiki/` container; return here
+when it completes, with the wiki root at `<cwd>/<basename>-wiki` and the domain
+label known. wiki-init ends with its own "## Report / Next steps" message aimed
+at standalone use ("cd into the wiki, start researching") — **disregard that
+closing when it runs under factory-init: you are not done.** Continue to Step 3;
+factory-init writes the final report itself (Step 7).
 
 ## Step 3 — Declare docs_path
 
@@ -151,9 +155,14 @@ for a yes:
 > me to ingest them into the wiki? `/wiki-ingest` runs the PII gate and files
 > each one — nothing outside `wiki/` is ever modified.
 
-Never auto-ingest. On yes, hand the file list to `/wiki-ingest` (do not ingest
-here yourself); it applies the noise skip-with-a-note and PII gate per source.
-On no, drop it — the user can ingest anytime later.
+Never auto-ingest. On yes, invoke `/llm-wiki:wiki-ingest` (via the Skill tool,
+full name — NOT `llm-wiki:ingest`), passing the scaffolded wiki root and the
+file list: args `--auto --wiki "<wiki-root>" <file1> <file2> …`. The `--wiki`
+value is required — without it wiki-ingest resolves from the project-root cwd
+and can file into the wrong registered wiki; `--auto` batches the set without
+stopping to discuss each file (the user already opted into the whole batch). Do
+not ingest here yourself; wiki-ingest applies the noise skip-with-a-note and PII
+gate per source. On no, drop it — the user can ingest anytime later.
 
 ## Step 7 — Confirm
 

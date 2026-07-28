@@ -110,8 +110,10 @@ session:
 
 - **For each stray** (a `.md` file sitting outside `wiki/`, `raw/`, and
   `docs_path`): offer the user routing:
-  - **Ingest it into the wiki** via the wiki's own ingest conventions
-    (`/llm-wiki:wiki-ingest`), or
+  - **Ingest it into the wiki** — invoke `/llm-wiki:wiki-ingest` via the Skill
+    tool with `--wiki "<wiki-root>" "<stray-path>"`; the `--wiki` value is
+    required so it files into THIS session's wiki rather than a cwd-resolved
+    one (the same contract research / factory-init / staff use), or
   - **Move it to `docs_path`** (resolved via
     `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/resolve_wiki.py" --get-docs-path "<wiki-root>"`
     if not already known) and create a `source`-type stub for it.

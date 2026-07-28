@@ -19,10 +19,17 @@ Read the user's request and map it to one of these intents:
 | "analyze this", "read this and", "what's missing in", "risks in" | `/llm-wiki:analyze` |
 | "critique", "verify", "challenge", "red-team", "fact-check" | `/llm-wiki:critique` |
 | "synthesize", "combine", "pull together findings on", "make a summary page for" | `/llm-wiki:synthesize` |
-| "health check", "lint", "is the wiki healthy", "any issues", "check the wiki" | `/llm-wiki:wiki-lint` |
-| "create a wiki", "new wiki", "initialize", "scaffold" | `/llm-wiki:wiki-init` |
-| "update the overview", "refresh the overview" | `/llm-wiki:overview-refresh` *(v1.1)* |
 | "update the [type] summary", "make a [type] overview page" | `/llm-wiki:synthesize` with `--update --type <type>` |
+| "update the overview", "refresh the overview" | `/llm-wiki:overview-refresh` |
+| "health check", "lint", "is the wiki healthy", "any issues", "check the wiki" | `/llm-wiki:wiki-lint` |
+| "build the graph", "refresh the graph", "graphify" | `/llm-wiki:graphify-wiki` |
+| "initialize a project", "set up this project for the factory", "factory init", "adopt this wiki" (adopt → `--adopt`) | `/llm-wiki:factory-init` |
+| "create just a wiki", "scaffold a plain wiki" (no factory layer) | `/llm-wiki:wiki-init` |
+| "staff my team", "build my agent team", "help me hire", "who should be on the team" | `/llm-wiki:staff` |
+| "run the [name] team on X", "[persona], what do you think about X", "recruit a [role]" | `/llm-wiki:team` |
+| "wrap up", "close the session", "done for today" | `/llm-wiki:session-close` |
+| "review the pattern log", "improve the personas" | `/llm-wiki:improve` |
+| "forget this wiki", "deregister", "remove from registry" | `/llm-wiki:wiki-forget` |
 | "deep dive", "thorough analysis", "exhaustive" | Dispatch the matching skill with `--deep` |
 
 ## Flag translation
@@ -52,7 +59,7 @@ Never guess silently. One question is always better than the wrong dispatch.
 
 ## Passthrough
 
-Once intent and flags are clear, invoke the target skill directly. Do not re-implement the target skill's logic here. The router's only job is classification + dispatch.
+Once intent and flags are clear, invoke the target skill directly (via the Skill tool). Do not re-implement the target skill's logic here. The router's only job is classification + dispatch.
 
 ## Examples
 

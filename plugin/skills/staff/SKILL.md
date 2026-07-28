@@ -194,6 +194,14 @@ one approval before writing `working-guidelines.md` or drafting anything from
 the domain-expertise passages. A declined row is simply dropped — note it in
 Step 7's bookkeeping as declined, and move on.
 
+When an approved row routes **project facts** to the wiki, invoke
+`/llm-wiki:wiki-ingest` (via the Skill tool, full name — NOT `llm-wiki:ingest`)
+and pass the resolved wiki root: `--wiki "<wiki_root>" <source-paths>` (add
+`--auto` for a multi-file batch; for a single reviewed doc, interactive is
+fine). The `--wiki` value is required — without it wiki-ingest resolves from cwd
+and can file into the wrong registered wiki. This is the same handoff contract
+research and factory-init use.
+
 **On Gemini:** there is no native diff view for the `working-guidelines.md`
 write — print the full proposed file content (or the appended section, on an
 update) inline as a unified diff in the message body and get the same

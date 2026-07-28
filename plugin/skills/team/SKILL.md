@@ -75,8 +75,9 @@ decide — never pre-select one for them:
 - **Run an existing team** — offered only when the list above is non-empty;
   show the team names, and on a pick continue to team resolution below.
 - **Build a whole team (guided)** — the right door for a new project, or any
-  time the user wants more than one member. Hand off to the `/staff` skill: it
-  runs the context-first interview (including the focused-3–5 / full-bench-
+  time the user wants more than one member. Invoke the `/staff` skill (via the
+  Skill tool) now — it runs its own context-first interview (so the user is not
+  re-asked what you already gathered), including the focused-3–5 / full-bench-
   up-to-9 team-size question) and proposes a multi-member slate the user
   edits. State this plainly — the user must never have to already know
   `/staff` exists to find the multi-member path.
@@ -468,8 +469,8 @@ Trigger: `/team recruit <role> for <task>`.
 
 **Confirm this is a single hire before drafting.** Recruit produces exactly
 **one** persona. If the user is staffing a new project from scratch, wants more
-than one member, or is unsure how many, do not proceed here — hand off to the
-`/staff` skill (guided interview + multi-member slate), the whole-team door.
+than one member, or is unsure how many, do not proceed here — invoke the
+`/staff` skill via the Skill tool (guided interview + multi-member slate), the whole-team door.
 Only continue below once a single role for a single task is settled.
 
 1. **Source material.** Search the factory home's own curated pool first,

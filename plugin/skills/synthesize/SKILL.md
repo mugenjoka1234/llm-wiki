@@ -1,6 +1,6 @@
 ---
 name: synthesize
-description: Cross-page synthesis — combine claims across multiple wiki pages, identify contradictions, produce a new synthesis digest. NEVER modifies existing pages (use overview-refresh to rewrite existing pages). Use when the user says "synthesize findings on Y", "pull together everything on X", "make a summary page for all competitors", "combine what we know about Z", or "thorough synthesis of X" (thorough/exhaustive → --deep for opus). Does NOT answer one-off questions — use query for that. Pass `--update` to rewrite an existing type-summary page in place (e.g. 'update the competitors summary' → --update --type competitor). Shows diff and requires confirmation before writing.
+description: Cross-page synthesis — combine claims across multiple wiki pages, surface contradictions, and write a NEW synthesis digest (never modifies existing pages). Use when the user says "synthesize findings on X", "pull together everything on X", "make a summary page for [type]", "combine what we know about X", or "thorough synthesis of X" (→ --deep). Pass --update --type <type> to rewrite an existing type-summary page in place. For one-off questions use the query skill; to rewrite the overview use overview-refresh.
 ---
 
 # synthesize skill

@@ -1,6 +1,6 @@
 ---
 name: improve
-description: Review the factory home's pattern jot and propose persona edits as diffs, one per persona, never applying without explicit human approval; the fenced Immutable Anchors are guarded byte-unchanged before any write. Approved edits commit individually — base personas to the factory home's git repo, project copies to their own project's repo — so git revert is the rollback in whichever repo holds the file. Requires a registered factory home that is a git repo with a clean tree; STOPs otherwise. Use when the user says "/improve review", "review the pattern log", "improve the personas", or asks whether recurring feedback should change a persona.
+description: Review the factory home's pattern jot and propose persona edits as human-gated diffs (one per persona; fenced Immutable Anchors guarded byte-unchanged; approved edits commit individually so git revert is the rollback). Requires a registered factory-home git repo with a clean tree; STOPs otherwise. Use when the user says "/improve review", "review the pattern log", "improve the personas", or asks whether recurring feedback should change a persona.
 ---
 
 # improve skill

@@ -5,13 +5,13 @@
   },
   "metadata": {
     "description": "A persistent markdown wiki plus an AI-factory layer (budgeted persona teams, idempotent session close, human-gated self-improvement) for Claude Code.",
-    "version": "0.3.17"
+    "version": "0.3.18"
   },
   "plugins": [
     {
       "name": "llm-wiki",
       "source": "./plugin",
-      "description": "Wiki skills (research, analyze, critique, synthesize, query, lint) plus a Claude-only factory layer (team, session-close, improve) — 16 skills, 6 bundled agents, on a growing markdown wiki.",
+      "description": "Wiki skills (research, analyze, critique, synthesize, query, lint) plus a Claude-only factory layer (staff, team, session-close, improve) — 17 skills, 6 bundled agents, on a growing markdown wiki.",
       "author": {
         "name": "Pranay Agrawal"
       },

@@ -32,10 +32,10 @@ After editing a local checkout of the plugin: `/reload-plugins` in-session.
 
 ## Requirements
 
-- **Claude Code.** All 16 skills work there.
+- **Claude Code.** All 17 skills work there.
 - **python3** — standard library only. No `pip install` needed for any bundled script.
 - **git** — each wiki and each factory home is its own git repo (history + rollback).
-- **Gemini CLI** — the wiki skills (research, analyze, critique, synthesize, query, wiki-init, wiki-lint, etc.) work there too via the bundled shim (`plugin/GEMINI.md`); the four factory skills (`factory-init`, `/team`, `/session-close`, `/improve`) are Claude Code-only.
+- **Gemini CLI** — the wiki skills (research, analyze, critique, synthesize, query, wiki-init, wiki-lint, etc.) work there too via the bundled shim (`plugin/GEMINI.md`); the five factory skills (`factory-init`, `/staff`, `/team`, `/session-close`, `/improve`) are Claude Code-only.
 
 ## Quick start
 
@@ -57,7 +57,7 @@ Three layers, one owner each:
 
 ## Skills
 
-12 skills in the wiki subsystem plus 4 Claude-only skills in the factory subsystem — 16 total.
+12 skills in the wiki subsystem plus 5 Claude-only skills in the factory subsystem — 17 total.
 
 ### Wiki subsystem (Claude Code + Gemini CLI)
 
@@ -81,6 +81,7 @@ Three layers, one owner each:
 | Skill | What it does |
 |---|---|
 | `/llm-wiki:factory-init` | Scaffold or adopt a project — wiki, deliverables tree, factory-home registration, default-team selection |
+| `/staff` | Guided team staffing — context-first interview, doctrine-driven slate composition, and layered hiring (base personas to the factory home, client-flavored copies to the project wiki), each validated and diff-gated |
 | `/team` | Spawn a persona team (or a single persona) with budgeted wiki context, honest partial-panel disclosure, and self-authored attribution; also recruits new personas |
 | `/session-close` | Idempotent session wrap-up — sweep stray files, refresh the session page and overview, jot durable feedback patterns to the factory home, re-lint |
 | `/improve` | Review the factory home's pattern jot and propose persona edits as human-approved diffs, one commit per persona |

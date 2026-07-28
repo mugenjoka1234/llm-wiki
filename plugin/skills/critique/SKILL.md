@@ -40,11 +40,23 @@ description: Critique a wiki page. Fidelity mode (page has cited sources) — ve
 
 6. Validate output (`--agent critic`). Handle 0/1/2 branches.
 
-7. Offer to the user:
-   - File as a critique digest: `<wiki>/wiki/digests/critique-<slug>-<date>.md`
-   - Add findings to target page's Open Questions (each finding becomes a dated checkbox)
-   - Both
-   - Discard (print only)
+7. **Offer to file the critique — filing goes through ingestion so it compounds,
+   same as analyze and research.** Ask the user which:
+   - **File into the wiki (compounds).** Write the critique findings to
+     `<wiki>/raw/critique-<slug>-<today>.md`, append a MANIFEST entry, then invoke
+     `/llm-wiki:wiki-ingest` (via the Skill tool, full name — NOT `llm-wiki:ingest`)
+     with `--auto --wiki "$wiki_path" "$wiki_path/raw/critique-<slug>-<today>.md"`.
+     Ingestion writes the digest, **back-propagates to the critiqued page** (so the
+     audit is visible on the page it's about), and logs it.
+     ```bash
+     echo "- [ ] \`critique-${slug}-${today}.md\` — Critique output • public • pending-ingest" >> "$wiki_path/raw/MANIFEST.md"
+     ```
+     **Do NOT hand-write a bare `wiki/digests/critique-*.md`** — that orphans it
+     (no catalog entry, no entity enrichment, no log).
+   - **Add findings to the target page's Open Questions** (each finding becomes a
+     dated checkbox) — a lighter action for surfacing the issues on that page.
+   - **Both** — file into the wiki and add open questions to the target page.
+   - **Discard** — print only (the ephemeral case).
 
 ## Error handling
 

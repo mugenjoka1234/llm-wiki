@@ -57,8 +57,26 @@ else
          -o "$abs_path/.obsidian/plugins/dataview/main.js"
     curl -sL "https://github.com/blacksmithgu/obsidian-dataview/releases/latest/download/manifest.json" \
          -o "$abs_path/.obsidian/plugins/dataview/manifest.json"
-    open -a Obsidian "$abs_path"
-    echo "Obsidian configured and opening. Click 'Open' if prompted for vault confirmation."
+    # Register the vault in obsidian.json before opening, so a first-time vault
+    # isn't rejected with "Vault not found" (same fix as wiki-init).
+    obsidian_json="$HOME/Library/Application Support/obsidian/obsidian.json"
+    if [ -f "$obsidian_json" ]; then
+        python3 - "$obsidian_json" "$abs_path" << 'PY'
+import json, secrets, sys, time
+cfg_path, vault_path = sys.argv[1], sys.argv[2]
+with open(cfg_path) as f:
+    cfg = json.load(f)
+vaults = cfg.setdefault("vaults", {})
+if not any(v.get("path") == vault_path for v in vaults.values()):
+    vaults[secrets.token_hex(8)] = {"path": vault_path, "ts": int(time.time() * 1000), "open": True}
+    with open(cfg_path, "w") as f:
+        json.dump(cfg, f, indent=2)
+PY
+        open "obsidian://open?path=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$abs_path")"
+    else
+        open -a Obsidian "$abs_path"
+    fi
+    echo "Obsidian configured and opening. Click 'Trust author and enable plugins' if prompted."
 fi
 ```
 

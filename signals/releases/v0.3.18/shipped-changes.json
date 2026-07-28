@@ -1,0 +1,213 @@
+{
+  "spec_version": 1,
+  "release_id": "v0.3.18",
+  "window": {
+    "from_ref": "v0.3.0",
+    "to_ref": "ffe18690",
+    "start": "2026-07-13",
+    "end": "2026-07-27"
+  },
+  "changes": [
+    {
+      "id": "chg-1",
+      "summary": "Wiki templates reframed to present the wiki as a project's institutional memory (decisions, process, external memory), not just a doc dump",
+      "type": "feature",
+      "commits": [
+        "df70b731"
+      ],
+      "surfaces": [
+        "wiki templates"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": [
+        "This is a CLI/markdown plugin with no analytics instrumentation and no signals/tracking-plan.yaml \u2014 events_touched is empty by nature for every change here; this is not tracking-plan drift."
+      ]
+    },
+    {
+      "id": "chg-2",
+      "summary": "Scaffolding UX overhaul \u2014 the wiki now lands in a clean <project>-wiki/ container (no more nested wiki/wiki/), opens directly in Obsidian, and offers opt-in ingest of existing docs",
+      "type": "feature",
+      "commits": [
+        "ff764066",
+        "a4a562fa",
+        "1919f677"
+      ],
+      "surfaces": [
+        "wiki-init scaffold",
+        "factory-init",
+        "Obsidian setup"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": [
+        "Mixes feat (new container UX) and fix (removing wiki/wiki nesting, container-path refs) commits; classified feature by net user impact."
+      ]
+    },
+    {
+      "id": "chg-3",
+      "summary": "/team offers to add the standard citation anchor inline instead of hard-refusing to spawn a persona that lacks one",
+      "type": "feature",
+      "commits": [
+        "797965a1"
+      ],
+      "surfaces": [
+        "/team recruit"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    },
+    {
+      "id": "chg-4",
+      "summary": "/staff distinguishes a new-project cold start from expanding an existing project's team, so it no longer assumes the factory-home roster is the team",
+      "type": "fix",
+      "commits": [
+        "dd17fa23"
+      ],
+      "surfaces": [
+        "/staff"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    },
+    {
+      "id": "chg-5",
+      "summary": "Wiki scaffolding registers the vault in obsidian.json before opening it, fixing the first-open 'Vault not found' error",
+      "type": "fix",
+      "commits": [
+        "1813038d"
+      ],
+      "surfaces": [
+        "wiki-init Obsidian setup"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    },
+    {
+      "id": "chg-6",
+      "summary": "/team presents an explicit fork (run existing team / build a whole team via /staff / hire one individual / custom) instead of funneling every request into a single-persona recruit",
+      "type": "feature",
+      "commits": [
+        "c1b9f060"
+      ],
+      "surfaces": [
+        "/team routing"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    },
+    {
+      "id": "chg-7",
+      "summary": "/staff profiles every proposed team member before asking for approval, so the user sees who each hire is rather than a bare list of names",
+      "type": "fix",
+      "commits": [
+        "322eda64"
+      ],
+      "surfaces": [
+        "/staff slate"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    },
+    {
+      "id": "chg-8",
+      "summary": "Team-reporting overhaul \u2014 personas report on a fixed five-part contract, the orchestrator synthesizes answer-first and concrete (recommendation + specifics, not a wall of takes), and a schema-enforced validate-report gate plus per-question effort scaling right-size and validate each run",
+      "type": "feature",
+      "commits": [
+        "ec7b8115",
+        "3ff2c846",
+        "4b178323",
+        "adfb3364",
+        "b6f1aaee"
+      ],
+      "surfaces": [
+        "/team reporting",
+        "/team synthesis",
+        "team_ops.py (validate-report)"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": [
+        "Feature iterated across five releases (v0.3.5-v0.3.10) including a bottom_line budget calibration fix (v0.3.8) folded in here as part of the same feature."
+      ]
+    },
+    {
+      "id": "chg-9",
+      "summary": "Skill preflight checks the resolved plugin path instead of a phantom CLAUDE_PLUGIN_ROOT env var (which is a text placeholder, not a shell variable), fixing a spurious 'not set' hard-fail across all 17 skills",
+      "type": "fix",
+      "commits": [
+        "dd45b4da"
+      ],
+      "surfaces": [
+        "all skills (preflight)"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    },
+    {
+      "id": "chg-10",
+      "summary": "Skill-chaining audit \u2014 every skill that files into the wiki now uses one uniform --auto --wiki ingest contract, analyze and critique now compound (were writing orphaned digests), the wiki router covers all 17 skills, and wiki-lint's Obsidian setup registers the vault",
+      "type": "fix",
+      "commits": [
+        "fd42b632",
+        "d77dbf1d",
+        "eb43bdc5",
+        "1262de56",
+        "44d32921",
+        "30732a94"
+      ],
+      "surfaces": [
+        "research",
+        "analyze",
+        "critique",
+        "wiki-ingest",
+        "factory-init",
+        "wiki-init",
+        "staff",
+        "session-close",
+        "wiki router",
+        "wiki-lint"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": [
+        "Surfaces derived largely from the detailed commit subjects plus partial diffs; several SKILL.md diffs exceeded the collector's diff budget (12 skipped paths across the range), so the per-file evidence is incomplete."
+      ]
+    },
+    {
+      "id": "chg-11",
+      "summary": "Corrected the plugin listing and README \u2014 17 skills (was mislabeled 16) and /staff now documented in the factory subsystem",
+      "type": "fix",
+      "commits": [
+        "ffe18690"
+      ],
+      "surfaces": [
+        "README",
+        "marketplace listing"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": [
+        "Docs-only; no runtime behavior change (the type enum has no 'docs' value, classified fix as the closest match)."
+      ]
+    }
+  ],
+  "excluded": {
+    "low_signal_commits": [
+      {
+        "sha": "2771846a",
+        "subject": "chore(skills): tighten verbose descriptions \u2014 synthesize, improve (v0.3.16)"
+      },
+      {
+        "sha": "ea964b51",
+        "subject": "chore(release): bump version to 0.3.1"
+      }
+    ]
+  }
+}

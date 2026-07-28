@@ -1,0 +1,204 @@
+{
+  "spec_version": 1,
+  "release_id": "v0.3.0",
+  "window": {
+    "from_ref": "v0.2.0",
+    "to_ref": "v0.3.0",
+    "start": "2026-07-12",
+    "end": "2026-07-13"
+  },
+  "changes": [
+    {
+      "id": "chg-1",
+      "summary": "Repositioned the plugin's framing \u2014 'institutional memory + an agent org that uses it', with a who-this-is-for section",
+      "type": "feature",
+      "commits": [
+        "bc90a81a"
+      ],
+      "surfaces": [
+        "README"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": [
+        "CLI/markdown plugin with no analytics instrumentation \u2014 events_touched is empty by nature, not tracking-plan drift."
+      ]
+    },
+    {
+      "id": "chg-2",
+      "summary": "Guided-staffing design spec and three implementation plans (internal design artifacts)",
+      "type": "infra",
+      "commits": [
+        "5e2b8d47",
+        "7479bb6a",
+        "36acbde0",
+        "ff2e604d",
+        "44a3e86c",
+        "ade2541b",
+        "cc5da578",
+        "41216fbd",
+        "34c94d0e",
+        "3785fcd9",
+        "54119411",
+        "fb248a17",
+        "6e8ea357",
+        "ffba9ab4"
+      ],
+      "surfaces": [
+        "docs/superpowers"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": [
+        "Internal design/spec/plan docs, no user-facing behavior; grouped and included for completeness."
+      ]
+    },
+    {
+      "id": "chg-3",
+      "summary": "Vendored the agency-agents persona catalog (~277 personas, MIT) with a sync script and attribution",
+      "type": "feature",
+      "commits": [
+        "92333bfc"
+      ],
+      "surfaces": [
+        "agency-agents catalog",
+        "/staff candidate search"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    },
+    {
+      "id": "chg-4",
+      "summary": "search-candidates across starter/catalog/references persona pools, with term-dedupe and word-boundary scoring",
+      "type": "feature",
+      "commits": [
+        "ea8f1026",
+        "9eae08a8"
+      ],
+      "surfaces": [
+        "/staff candidate search",
+        "team_ops.py"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    },
+    {
+      "id": "chg-5",
+      "summary": "Layered persona system \u2014 project copies shadow factory-home base personas, with drift notices, ack-fork, list-copies, and graceful degradation on unreadable copies",
+      "type": "feature",
+      "commits": [
+        "7d7fe335",
+        "e004acb9",
+        "a84f20d4",
+        "eb9650a2",
+        "2191e440",
+        "7d291144",
+        "38051fa0"
+      ],
+      "surfaces": [
+        "team_ops.py (resolve/validate/ack-fork)",
+        "/team",
+        "/improve"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    },
+    {
+      "id": "chg-6",
+      "summary": "The /staff skill \u2014 context-first interview, doctrine-driven slate composition, and layered hiring (base to factory home, project copies to the wiki)",
+      "type": "feature",
+      "commits": [
+        "35f9bed8",
+        "2191e440"
+      ],
+      "surfaces": [
+        "/staff"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": [
+        "Shares commit 2191e440 with chg-5 (a collision-check fix touching both the /staff flow and the layered-resolution machinery)."
+      ]
+    },
+    {
+      "id": "chg-7",
+      "summary": "/team layered spawning \u2014 --wiki-root, --project validation, drift surfacing, and solo parity",
+      "type": "feature",
+      "commits": [
+        "1c804124"
+      ],
+      "surfaces": [
+        "/team"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    },
+    {
+      "id": "chg-8",
+      "summary": "/improve layer-aware routing \u2014 explicit base/copy/both targeting, two-repo commits, per-target diffs",
+      "type": "feature",
+      "commits": [
+        "3290787e",
+        "5c904891"
+      ],
+      "surfaces": [
+        "/improve"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    },
+    {
+      "id": "chg-9",
+      "summary": "factory-init hands off to /staff on an empty roster; session-close jots wiki provenance; persona template notes",
+      "type": "feature",
+      "commits": [
+        "672596c9"
+      ],
+      "surfaces": [
+        "factory-init",
+        "session-close"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    },
+    {
+      "id": "chg-10",
+      "summary": "Nine generic archetype starter personas, refined for domain-neutrality (blank-domain reality-checker, real defers-on, verbatim citation anchors)",
+      "type": "feature",
+      "commits": [
+        "87c8c659",
+        "847c6da9",
+        "286b828d",
+        "91adb279"
+      ],
+      "surfaces": [
+        "starter roster"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    }
+  ],
+  "excluded": {
+    "low_signal_commits": [
+      {
+        "sha": "85e12593",
+        "subject": "chore(release): v0.3.0 \u2014 guided staffing + layered personas"
+      },
+      {
+        "sha": "72701808",
+        "subject": "chore: gitignore .superpowers scratch"
+      },
+      {
+        "sha": "0e9af0f3",
+        "subject": "chore: gitignore local dev files"
+      }
+    ]
+  }
+}

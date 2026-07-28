@@ -1,0 +1,91 @@
+{
+  "spec_version": 1,
+  "release_id": "v0.2.0",
+  "window": {
+    "from_ref": "(root \u2014 no prior release)",
+    "to_ref": "v0.2.0",
+    "start": "2026-07-12",
+    "end": "2026-07-12"
+  },
+  "changes": [
+    {
+      "id": "chg-1",
+      "summary": "The persistent wiki (Karpathy LLM-wiki pattern) \u2014 a markdown knowledge base with decision pages (lifecycle fields), trust-graded claims ([verified]/[hypothesis]/[REFUTED]), research digests, session logs, and entity pages; every wiki is also an Obsidian vault",
+      "type": "feature",
+      "commits": [
+        "30c553a1"
+      ],
+      "surfaces": [
+        "wiki knowledge base",
+        "Obsidian vault"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": [
+        "Initial public release \u2014 this baseline is reconstructed from the shipped feature set (README + skills), not from a git diff range, since there is no prior release to diff against. No analytics instrumentation, so events_touched is empty throughout."
+      ]
+    },
+    {
+      "id": "chg-2",
+      "summary": "The wiki skill set (Claude Code + Gemini CLI) \u2014 research (Haiku planner \u2192 no-LLM fetcher \u2192 Sonnet reader, URL-cited), analyze, critique (fidelity/challenge), synthesize, query, wiki-ingest (PII gate + digest + entity back-propagation), wiki-lint, wiki-init, wiki-forget, overview-refresh, graphify-wiki, and the wiki router",
+      "type": "feature",
+      "commits": [
+        "30c553a1"
+      ],
+      "surfaces": [
+        "wiki subsystem skills"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    },
+    {
+      "id": "chg-3",
+      "summary": "The factory layer (Claude Code only) \u2014 /team spawns persona teams with budgeted wiki context, self-authored attribution, and honest partial-panel disclosure; /session-close does idempotent session wrap-up; /improve proposes human-gated persona edits; /factory-init scaffolds a project and registers a factory home",
+      "type": "feature",
+      "commits": [
+        "30c553a1"
+      ],
+      "surfaces": [
+        "/team",
+        "/session-close",
+        "/improve",
+        "/factory-init"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    },
+    {
+      "id": "chg-4",
+      "summary": "Session hooks \u2014 a SessionEnd breadcrumb plus a SessionStart warning that nudges you to /session-close when the wiki has fallen behind the work; silent for non-wiki projects",
+      "type": "feature",
+      "commits": [
+        "30c553a1"
+      ],
+      "surfaces": [
+        "session hooks"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    },
+    {
+      "id": "chg-5",
+      "summary": "Six bundled research/analysis subagents \u2014 wiki-planner, wiki-researcher, wiki-analyst, wiki-analyst-haiku, wiki-critic, wiki-synthesizer",
+      "type": "feature",
+      "commits": [
+        "30c553a1"
+      ],
+      "surfaces": [
+        "bundled agents"
+      ],
+      "events_touched": [],
+      "flags_touched": [],
+      "uncertainty": []
+    }
+  ],
+  "excluded": {
+    "low_signal_commits": []
+  }
+}

@@ -37,3 +37,6 @@ CLAUDE.local.md
 .remember/
 *.png
 .superpowers/
+
+# eval transcripts embed private wiki text
+evals/.results/

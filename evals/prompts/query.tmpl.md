@@ -1,4 +1,4 @@
-Read {{PLUGIN_ROOT}}/skills/query/SKILL.md and follow it by reading that file directly. Do NOT invoke the Skill tool or any installed llm-wiki plugin command — this evaluation must exercise the skill files under {{PLUGIN_ROOT}}, not an installed copy to answer the question below.
+Read {{PLUGIN_ROOT}}/skills/query/SKILL.md and follow it to answer the question below. Follow the SKILL.md file directly — do NOT invoke the Skill tool or any installed llm-wiki plugin command; this evaluation must exercise the skill files under {{PLUGIN_ROOT}}, not an installed copy.
 
 The resolved wiki root is {{WIKI_ROOT}} — treat it as the target wiki; do not run wiki resolution against any other location.
 

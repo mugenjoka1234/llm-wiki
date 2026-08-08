@@ -49,7 +49,7 @@ def precision_recall_mrr(footer, relevant, primary):
 
 def parse_stream_json(path):
     out = {"result_text": "", "reads": [], "usage": {}, "total_cost_usd": 0.0,
-           "num_turns": 0}
+           "num_turns": 0, "is_error": False}
     for line in Path(path).read_text().splitlines():
         line = line.strip()
         if not line:
@@ -69,6 +69,7 @@ def parse_stream_json(path):
             out["usage"] = obj.get("usage") or {}
             out["total_cost_usd"] = float(obj.get("total_cost_usd") or 0.0)
             out["num_turns"] = int(obj.get("num_turns") or 0)
+            out["is_error"] = bool(obj.get("is_error"))
     return out
 
 def weighted_tokens(usage):
@@ -183,7 +184,11 @@ def main(argv=None):
     if gt is None:
         print(f"REFUSED: no ground truth for {a.case_id}")
         return 2
-    if a.case_type in ("query", "twin"):
+    if parsed["is_error"]:
+        # Executor-level failure (rate limit, crash) — not an agent-behavior
+        # result; fail loudly with the error text so it can't masquerade as an answer.
+        hard, soft, metrics = {"executor_ok": False}, {"executor_error": parsed["result_text"][:200]}, {}
+    elif a.case_type in ("query", "twin"):
         hard, soft, metrics = _grade_query(gt, a.sandbox, a.fixture, parsed)
     elif a.case_type == "ingest":
         hard, soft, metrics = _grade_ingest(gt, a.sandbox, a.fixture, parsed,

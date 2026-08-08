@@ -66,6 +66,7 @@ class TestStreamJson(unittest.TestCase):
         with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as f:
             f.write("\n".join(json.dumps(l) for l in lines)); p = f.name
         out = grade.parse_stream_json(p); os.unlink(p)
+        self.assertFalse(out["is_error"])
         self.assertEqual(out["result_text"], "answer text")
         self.assertEqual(out["reads"], ["/sb/wiki/a.md"])
         self.assertAlmostEqual(out["total_cost_usd"], 0.05)

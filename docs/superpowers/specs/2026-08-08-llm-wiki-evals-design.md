@@ -28,7 +28,7 @@ evals/
 - Private, at `$EVAL_WIKI/../eval-labels/`: `cases.json` (question text) and `ground-truth.json` (labeled pages). Questions and labels name private-wiki slugs — they never enter the public repo.
 - `evals/.results/` is gitignored **before the first run** (transcripts embed wiki page text verbatim).
 
-**Fixture:** `snapshot.sh` copies the live wiki (default: ai-content-wiki), strips `.git`, writes `fixture-manifest.json` (date, source path, content hash). `ground-truth.json` records that hash; `grade.py` **refuses to run** on hash mismatch — stale labels must fail loudly, not silently.
+**Fixture:** `snapshot.sh` copies the live wiki (default: ai-content-wiki), strips `.git`, writes `fixture-manifest.json` (date, source path, content hash). `ground-truth.json` records that hash; `grade.py` **refuses to run** on hash mismatch — stale labels must fail loudly, not silently. The hash target is the pristine `$EVAL_WIKI` fixture, checked once per suite run — never the sandboxes, which are mutated by design.
 
 ## Sandbox contract (per case)
 
@@ -51,9 +51,9 @@ Prompt: "Read `<CLAUDE_PLUGIN_ROOT>/skills/query/SKILL.md` and follow it for thi
 The SOURCES footer exists because the skill's natural output is an unordered citation set in prose — no ranked list to score (finding 3). Metrics are computed **over the footer**; in-prose citations feed only the hard checks.
 
 Grading:
-- **P@5 / R@5** vs the labeled relevant set; **MRR** vs the 1–3 labeled must-hit pages — over the SOURCES footer (primary, runtime-portable).
+- **P@5 / R@5** vs the labeled relevant set; **MRR** vs the 1–3 labeled must-hit pages — over the SOURCES footer (primary, runtime-portable). P@5 denominator when the footer is short: precision over the first min(5, |footer|) entries — a dense 3-source answer is not penalized for citing 3.
 - Diagnostic only (claude runtime): same metrics over files actually Read, parsed from stream-json `tool_use` blocks.
-- Hard: answer non-empty; SOURCES footer present and parseable; every cited wikilink **resolves** — where resolve = matches a file under the sandbox wiki, OR a `_graph.json` `pages` key, OR a `_graph.json` `entities` key, after stripping `[[slug|alias]]` and `[[page#section]]` syntax; `raw/...` links resolve against the sandbox tree (finding 9 — consolidated-page entity sections and snapshot links are legitimate citations, not fabrications).
+- Hard: answer non-empty; SOURCES footer present and parseable; every cited wikilink **resolves** — where resolve = matches a file under the sandbox wiki, OR a `_graph.json` `pages` key, OR a `_graph.json` `entities` key, after stripping `[[slug|alias]]` and `[[page#section]]` syntax; `raw/...` links resolve against the sandbox tree (finding 9 — consolidated-page entity sections and snapshot links are legitimate citations, not fabrications). The resolver always reads `_graph.json` from the pristine `$EVAL_WIKI` fixture, never the sandbox — twin sandboxes have it deleted by design, and grading must not lose the entities/pages lookup in the no-graph arm.
 - Soft: page-read count ≤ the skill's 15-page cap.
 
 ### twin-* (×3 question-pairs, ≥3 reps each, claude runtime only)
@@ -73,7 +73,7 @@ Prompt: follow wiki-ingest SKILL.md with `--auto --wiki <sandbox>/wiki-root <raw
 That clause exists because `--auto` does **not** skip step 9's y/n prompt, which sits before the MANIFEST flip — a compliant agent would hang/terminate and false-fail the case (finding 6). *Filed as a real skill bug: step 9 should be skipped in `--auto`.*
 
 Hard checks (all deterministic):
-- digest file exists under `wiki/digests/` and wiki `lint.py` exits 0
+- digest file exists under `wiki/digests/` and lint is **delta-clean**: `snapshot.sh` records the pristine fixture's lint output in `fixture-manifest.json` (the live wiki lints at exit 1 today — 7 pre-existing oversize-page warnings that would otherwise fail every ingest run for pages the agent never touched); grading hard-fails only on *new* warnings vs that baseline, or any exit 2. This matches the skill's own contract, which tolerates exit 1 and halts only on exit 2.
 - **no invented URLs:** set of URLs in the digest ⊆ set of URLs in the *pristine pre-mutation* fixture copy (the ingest mutates the sandbox copy)
 - back-propagation landed: each labeled target entity page gained a `## From [[<digest-slug>]]` section and the digest in its `sources:`
 - MANIFEST line flipped to `- [x] ... ingested <date> → wiki/digests/<slug>.md`
@@ -81,7 +81,7 @@ Hard checks (all deterministic):
 Dropped from earlier draft: "catalog line appended" — `lint.py` regenerates the catalog wholesale, so the check is vacuous (finding 11). Digest frontmatter schema is asserted instead.
 
 ### reader-* (×1)
-No SKILL.md exists for the read stage (finding 13) — the executor prompt **inlines the wiki-researcher agent contract** (from `plugin/agents/wiki-researcher.md`) verbatim, plus paths to a frozen subset of `raw/snapshots/` from the fixture. Hard: every cited URL ∈ the snapshots' `source_url` front-blocks; each labeled question's answer cites the snapshot that contains it. Judge: synthesis quality.
+No SKILL.md exists for the read stage (finding 13) — the executor prompt **inlines the wiki-researcher agent contract** (from `plugin/agents/wiki-researcher.md`) verbatim, plus paths to a frozen subset of `raw/snapshots/` from the fixture. The prompt requires the output be segmented per question, each section ending with a `Qn SOURCES: <url>, ...` line — without that, per-question grading isn't deterministic. Hard: every cited URL ∈ the snapshots' `source_url` front-blocks; each labeled question's `Qn SOURCES` line cites the snapshot that contains it. Judge: synthesis quality.
 
 ## Judge
 

@@ -5,7 +5,7 @@ SRC="${1:?usage: snapshot.sh <wiki-root> <dest-dir>}"
 DEST="${2:?usage: snapshot.sh <wiki-root> <dest-dir>}"
 [ -d "$SRC/wiki" ] || { echo "not a wiki root (no wiki/): $SRC"; exit 2; }
 mkdir -p "$DEST"
-rsync -a --delete --exclude '.git' --exclude 'fixture-manifest.json' "$SRC/" "$DEST/"
+rsync -a --delete --exclude '.git' --exclude 'fixture-manifest.json' --exclude '.DS_Store' --exclude '.obsidian' "$SRC/" "$DEST/"
 
 python3 - "$SRC" "$DEST" <<'PYEOF'
 import hashlib, json, subprocess, sys, datetime
@@ -22,7 +22,8 @@ baseline = [l for l in (r.stdout + r.stderr).splitlines() if l.strip()]
 # Hash SECOND: sorted relative paths + file bytes, post-lint = the stable state
 h = hashlib.sha256()
 for p in sorted(dest.rglob("*")):
-    if p.is_file() and p.name != "fixture-manifest.json":
+    if p.is_file() and p.name != "fixture-manifest.json" \
+            and p.name != ".DS_Store" and ".obsidian" not in p.parts:
         h.update(str(p.relative_to(dest)).encode())
         h.update(p.read_bytes())
 

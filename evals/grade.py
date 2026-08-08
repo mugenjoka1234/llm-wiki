@@ -6,7 +6,7 @@ from pathlib import Path
 WEIGHTS = {"input_tokens": 1.0, "cache_creation_input_tokens": 1.25,
            "cache_read_input_tokens": 0.1, "output_tokens": 5.0}
 FOOTER_RE = re.compile(r"SOURCES \(most relevant first\):\s*(.+)", re.IGNORECASE)
-URL_RE = re.compile(r"https?://[^\s)\]>\"']+")
+URL_RE = re.compile(r"https?://[^\s)\]>\"'`]+")
 
 def strip_link(link):
     s = link.strip()
@@ -76,11 +76,17 @@ def weighted_tokens(usage):
     return sum(WEIGHTS[k] * float(usage.get(k, 0)) for k in WEIGHTS)
 
 def extract_urls(text):
-    return {u.rstrip(".,;:)") for u in URL_RE.findall(text or "")}
+    return {u.rstrip(".,;:)`") for u in URL_RE.findall(text or "")}
+
+def _norm_lint(line):
+    # Oversize warnings embed live char counts; back-prop into an
+    # already-oversize page legitimately changes them. Compare shapes, not counts.
+    line = re.sub(r"[\d,]+ chars", "N chars", line)
+    return re.sub(r"\((\d+)\)", "(N)", line)
 
 def lint_delta(current_lines, baseline_lines):
-    base = set(baseline_lines)
-    return [l for l in current_lines if l not in base]
+    base = {_norm_lint(l) for l in baseline_lines}
+    return [l for l in current_lines if _norm_lint(l) not in base]
 
 def _grade_query(gt, sandbox, fixture, parsed):
     graph = load_graph(fixture)
@@ -99,7 +105,13 @@ def _grade_query(gt, sandbox, fixture, parsed):
 def _grade_ingest(gt, sandbox, fixture, parsed, pristine_raw):
     import shutil, subprocess as sp, tempfile
     digests = Path(sandbox) / "wiki" / "digests"
-    dig = next(iter(sorted(digests.glob(f"*{gt['digest_slug']}*.md"))), None)
+    # The agent names the digest by topic, not by our fixture filename — the
+    # reliable signal is "new file vs the fixture", with the slug glob as fallback.
+    fixture_digests = {p.name for p in (Path(fixture) / "wiki" / "digests").glob("*.md")}
+    new_digs = sorted(p for p in digests.glob("*.md")
+                      if p.name not in fixture_digests and p.name != "catalog.md")
+    dig = new_digs[0] if new_digs else \
+        next(iter(sorted(digests.glob(f"*{gt['digest_slug']}*.md"))), None)
     hard = {"digest_exists": dig is not None}
     if dig:
         pristine_urls = extract_urls(Path(pristine_raw).read_text())

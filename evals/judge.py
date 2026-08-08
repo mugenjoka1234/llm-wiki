@@ -75,7 +75,7 @@ def collect_ingest(artifacts_dir, gt):
     # pages there before the pass-path deletes the sandbox).
     parts = []
     for dig in sorted((Path(artifacts_dir) / "digests").glob("*.md")):
-        if gt["digest_slug"] in dig.stem:
+        if gt["digest_slug"] in dig.stem or dig.stem in gt.get("new_digests", []):
             parts.append(f"===== DIGEST =====\n{dig.read_text()[:PAGE_CAP]}")
     for t in gt["backprop_targets"]:
         p = Path(artifacts_dir) / f"{t}.md"

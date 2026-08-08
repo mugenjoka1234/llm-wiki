@@ -22,7 +22,8 @@ from pathlib import Path
 dest = Path(sys.argv[1])
 h = hashlib.sha256()
 for p in sorted(dest.rglob("*")):
-    if p.is_file() and p.name != "fixture-manifest.json":
+    if p.is_file() and p.name != "fixture-manifest.json" \
+            and p.name != ".DS_Store" and ".obsidian" not in p.parts:
         h.update(str(p.relative_to(dest)).encode()); h.update(p.read_bytes())
 m = json.loads((dest / "fixture-manifest.json").read_text())
 if m["content_hash"] != h.hexdigest():

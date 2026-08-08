@@ -38,6 +38,7 @@ case "$RUNTIME" in
 esac
 OUT="${EVAL_OUT:-$EVALS/.results/$(date -u +%Y%m%dT%H%M%SZ)}"
 mkdir -p "$OUT"
+OUT="$(cd "$OUT" && pwd)"  # absolutize: run_agent cds into the sandbox, relative EVAL_OUT would miss
 
 run_agent() {  # $1 prompt file, $2 transcript out, $3 stderr out; cwd = sandbox wiki root
   case "$RUNTIME" in

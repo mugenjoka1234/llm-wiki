@@ -23,7 +23,7 @@ description: Ingest a raw source file into the wiki — runs the PII gate, produ
    handoff from an older caller), do NOT fail — fall through to resolution
    (step 2) from the raw file's own directory or cwd, and note that the caller
    omitted `--wiki`. `--auto` only governs the interactive skips (takeaways,
-   stub-offer) below; it must never leave `$wiki_path` unset.
+   stub-offer, question-extraction offer) below; it must never leave `$wiki_path` unset.
 2. Otherwise (no `--auto`): `resolve_wiki.py --cwd "$(pwd)"`. If source `none` → error. If ambiguous → present options.
 
 ### Verify input
@@ -162,6 +162,10 @@ Read `<wiki>/CLAUDE.md` § Ingest workflow. Execute step-by-step:
     If the entity page already has a `summary:` field, update it only if this ingest adds significant new information. Keep it under one line.
 
 9. **Offer to extract new `- [ ]` checkboxes into the questions/ folder.**
+
+    Skip this step in `--auto` mode — it is interactive, and `--auto` runs are
+    headless (chained from research or evals); a y/n offer here hangs the run
+    before the log append (10) and MANIFEST flip (11) ever happen.
 
     After updating entity pages, scan updated pages for new unchecked `- [ ]` items in `## Open questions` sections. If any exist, offer:
 

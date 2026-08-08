@@ -138,6 +138,7 @@ PYEOF
       mkdir -p "$OUT/$RUN_ID-artifacts"
       cp -R "$SB/wiki-root/wiki/digests" "$OUT/$RUN_ID-artifacts/" 2>/dev/null || true
       cp "$SB/wiki-root/wiki/"*.md "$OUT/$RUN_ID-artifacts/" 2>/dev/null || true
+      cp "$SB/wiki-root/raw/MANIFEST.md" "$OUT/$RUN_ID-artifacts/" 2>/dev/null || true
     fi
     if python3 "$EVALS/grade.py" --case-id "$RUN_ID" --case-type "$TYPE" \
         --sandbox "$SB/wiki-root" --fixture "$FIXTURE" --labels "$LABELS" \

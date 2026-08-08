@@ -88,6 +88,11 @@ def lint_delta(current_lines, baseline_lines):
     base = {_norm_lint(l) for l in baseline_lines}
     return [l for l in current_lines if _norm_lint(l) not in base]
 
+def canon(slug):
+    # digests/foo and foo are the same page for metric purposes; resolution
+    # (resolve_link) keeps raw spellings because it cares about actual paths.
+    return slug.rsplit("/", 1)[-1]
+
 def _grade_query(gt, sandbox, fixture, parsed):
     graph = load_graph(fixture)
     footer = parse_sources_footer(parsed["result_text"])
@@ -98,7 +103,15 @@ def _grade_query(gt, sandbox, fixture, parsed):
         "all_links_resolve": all(resolve_link(s, fixture, sandbox, graph)
                                  for s in set(footer + inprose)),
     }
-    metrics = precision_recall_mrr(footer, set(gt["relevant"]), gt["primary"])
+    # Dedup canonically so double-citing one page under two spellings can't
+    # farm P@5/R@5 hits, and R@5's denominator counts distinct pages.
+    seen, cfooter = set(), []
+    for s in footer:
+        c = canon(s)
+        if c not in seen:
+            seen.add(c); cfooter.append(c)
+    metrics = precision_recall_mrr(cfooter, {canon(x) for x in gt["relevant"]},
+                                   [canon(x) for x in gt["primary"]])
     soft = {"reads_within_cap": len([r for r in parsed["reads"] if "/wiki/" in r]) <= 15}
     return hard, soft, metrics
 
@@ -117,14 +130,20 @@ def _grade_ingest(gt, sandbox, fixture, parsed, pristine_raw):
         pristine_urls = extract_urls(Path(pristine_raw).read_text())
         hard["no_invented_urls"] = extract_urls(dig.read_text()) <= pristine_urls
         hard["digest_is_source_type"] = "type: source" in dig.read_text()[:400]
-    for t in gt["backprop_targets"]:
+    def _backpropped(t):
         page = Path(sandbox) / "wiki" / f"{t}.md"
         ptext = page.read_text() if page.exists() else ""
         # Exact "## From [[<digest>]]" section AND the digest in the frontmatter
         # sources block — live pages carry many pre-existing From-sections.
         fm = ptext.split("---")[1] if ptext.count("---") >= 2 else ""
-        hard[f"backprop:{t}"] = bool(dig) and f"## From [[{dig.stem}]]" in ptext \
-                                and dig.stem in fm
+        return bool(dig) and f"## From [[{dig.stem}]]" in ptext and dig.stem in fm
+    for t in gt.get("backprop_targets", []):
+        hard[f"backprop:{t}"] = _backpropped(t)
+    any_of = gt.get("backprop_targets_any_of")
+    if any_of:
+        # Topically-adjacent targets where a reasonable agent picks one:
+        # requiring all would false-fail correct behavior.
+        hard["backprop_any_of:" + "|".join(any_of)] = any(_backpropped(t) for t in any_of)
     # MANIFEST: scoped to the seeded file — the real MANIFEST has pre-existing
     # [x] lines and one pre-existing pending-ingest entry the agent must not touch.
     fix_name = Path(pristine_raw).name

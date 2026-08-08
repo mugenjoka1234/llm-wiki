@@ -46,6 +46,11 @@ class TestMetrics(unittest.TestCase):
         m = grade.precision_recall_mrr(["x", "p1", "p2"], {"p1"}, ["p1", "p2"])
         self.assertAlmostEqual(m["mrr"], 1 / 2)          # first primary at rank 2
 
+    def test_canon(self):
+        self.assertEqual(grade.canon("digests/foo"), "foo")
+        self.assertEqual(grade.canon("questions/bar"), "bar")
+        self.assertEqual(grade.canon("foo"), "foo")
+
     def test_empty_footer(self):
         m = grade.precision_recall_mrr([], {"a"}, ["a"])
         self.assertEqual((m["p_at_5"], m["r_at_5"], m["mrr"]), (0.0, 0.0, 0.0))

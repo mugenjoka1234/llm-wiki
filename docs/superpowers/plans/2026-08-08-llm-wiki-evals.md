@@ -113,18 +113,19 @@ import hashlib, json, subprocess, sys, datetime
 from pathlib import Path
 src, dest = Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve()
 
-# Deterministic content hash: sorted relative paths + file bytes
+# Lint FIRST — lint.py mutates its target (writes _health.md, regenerates
+# catalogs, autofixes trust lines). Hashing before lint would record bytes the
+# fixture no longer has the moment it's created.
+r = subprocess.run([sys.executable, str(dest / "scripts" / "lint.py")],
+                   cwd=dest, capture_output=True, text=True)
+baseline = [l for l in (r.stdout + r.stderr).splitlines() if l.strip()]
+
+# Hash SECOND: sorted relative paths + file bytes, post-lint = the stable state
 h = hashlib.sha256()
 for p in sorted(dest.rglob("*")):
     if p.is_file() and p.name != "fixture-manifest.json":
         h.update(str(p.relative_to(dest)).encode())
         h.update(p.read_bytes())
-
-# Lint baseline: run the FIXTURE's own lint copy so the baseline matches what
-# grading will re-run later (finding N1: live wiki has pre-existing warnings)
-r = subprocess.run([sys.executable, str(dest / "scripts" / "lint.py")],
-                   cwd=dest, capture_output=True, text=True)
-baseline = [l for l in (r.stdout + r.stderr).splitlines() if l.strip()]
 
 manifest = {
     "frozen": datetime.date.today().isoformat(),
@@ -279,8 +280,9 @@ def parse_sources_footer(text):
     hits = FOOTER_RE.findall(text or "")
     if not hits:
         return []
-    return [strip_link(t) for t in re.findall(r"\[\[[^\]]+\]\]|[\w./-]+", hits[-1])
-            if t.strip(" ,")]
+    # Only [[wikilinks]] and raw/ paths — bare words on the footer line are prose,
+    # not slugs; sweeping them in pollutes P@5 and false-fails resolution.
+    return [strip_link(t) for t in re.findall(r"\[\[[^\]]+\]\]|raw/[\w./-]+", hits[-1])]
 
 def load_graph(fixture_root):
     p = Path(fixture_root) / "wiki" / "_graph.json"
@@ -367,7 +369,8 @@ Note the resolver test's first assertion: a file present only in the *fixture* d
   "query": {"q01": {"relevant": ["slug", "..."], "primary": ["slug"]}},
   "ingest": {"i01": {"digest_slug": "eval-fixture-tokens",
                       "backprop_targets": ["entity-slug", "..."]}},
-  "reader": {"r01": {"answers": {"Q1": "snapshot-file-stem", "Q2": "..."}}}
+  "reader": {"r01": {"snapshots": ["snapshot-file-stem", "..."],
+                      "answers": {"Q1": "snapshot-file-stem", "Q2": "..."}}}
 }
 ```
 
@@ -435,7 +438,7 @@ def _grade_query(gt, sandbox, fixture, parsed):
     return hard, soft, metrics
 
 def _grade_ingest(gt, sandbox, fixture, parsed, pristine_raw):
-    import subprocess as sp
+    import shutil, subprocess as sp, tempfile
     digests = Path(sandbox) / "wiki" / "digests"
     dig = next(iter(sorted(digests.glob(f"*{gt['digest_slug']}*.md"))), None)
     hard = {"digest_exists": dig is not None}
@@ -445,27 +448,59 @@ def _grade_ingest(gt, sandbox, fixture, parsed, pristine_raw):
         hard["digest_is_source_type"] = "type: source" in dig.read_text()[:400]
     for t in gt["backprop_targets"]:
         page = Path(sandbox) / "wiki" / f"{t}.md"
-        ok = page.exists() and f"## From [[" in page.read_text() and \
-             (dig is not None and dig.stem in page.read_text())
-        hard[f"backprop:{t}"] = bool(ok)
-    man = (Path(sandbox) / "raw" / "MANIFEST.md")
-    hard["manifest_flipped"] = man.exists() and "- [x]" in man.read_text() and \
-                               "pending-ingest" not in man.read_text()
+        ptext = page.read_text() if page.exists() else ""
+        # Real check, not substring luck: the exact "## From [[<digest>]]" section
+        # AND the digest in the frontmatter sources block (live pages have many
+        # pre-existing From-sections from prior ingests).
+        fm = ptext.split("---")[1] if ptext.count("---") >= 2 else ""
+        hard[f"backprop:{t}"] = bool(dig) and f"## From [[{dig.stem}]]" in ptext \
+                                and dig.stem in fm
+    # MANIFEST: scope to the seeded file only — the real MANIFEST has 21
+    # pre-existing "- [x]" lines and one pre-existing pending-ingest entry the
+    # agent must NOT touch; a global check false-fails every run.
+    fix_name = Path(pristine_raw).name
+    man = Path(sandbox) / "raw" / "MANIFEST.md"
+    man_lines = [l for l in (man.read_text().splitlines() if man.exists() else [])
+                 if f"`{fix_name}`" in l]
+    hard["manifest_flipped"] = bool(man_lines) and all(
+        "- [x]" in l and "ingested" in l and "pending-ingest" not in l
+        for l in man_lines)
+    # Lint delta: same-day, same-env double run — lint a fresh COPY of the
+    # pristine fixture (lint mutates its target: catalogs, _health.md, and
+    # 90-day staleness output shift over time, so the frozen baseline in the
+    # manifest is documentation, not the reference).
     r = sp.run(["python3", str(Path(sandbox) / "scripts" / "lint.py")],
                cwd=sandbox, capture_output=True, text=True)
-    manifest = json.loads((Path(fixture) / "fixture-manifest.json").read_text())
     cur = [l for l in (r.stdout + r.stderr).splitlines() if l.strip()]
-    delta = lint_delta(cur, manifest["lint_baseline"])
+    with tempfile.TemporaryDirectory() as td:
+        ref = Path(td) / "ref"
+        shutil.copytree(fixture, ref,
+                        ignore=shutil.ignore_patterns("fixture-manifest.json"))
+        rb = sp.run(["python3", str(ref / "scripts" / "lint.py")],
+                    cwd=ref, capture_output=True, text=True)
+    base = [l for l in (rb.stdout + rb.stderr).splitlines() if l.strip()]
+    delta = lint_delta(cur, base)
     hard["lint_delta_clean"] = (r.returncode < 2) and not delta
     return hard, {"lint_delta": delta}, {}
 
+def _front_block_urls(path):
+    m = re.match(r"(?s)^---\n(.*?)\n---", path.read_text())
+    return extract_urls(m.group(1)) if m else set()
+
 def _grade_reader(gt, sandbox, fixture, parsed):
     text = parsed["result_text"]
-    snaps = {p.stem: extract_urls(p.read_text())
-             for p in (Path(fixture) / "raw" / "snapshots").glob("*.md")}
-    all_snap_urls = set().union(*snaps.values()) if snaps else set()
+    # Only the case's labeled snapshot stems, and only their YAML front-block
+    # URLs (source_url/final_url) — the fixture holds 158 snapshots whose
+    # crawled bodies are full of incidental URLs a fabricated citation could
+    # collide with.
+    stems = gt.get("snapshots") or sorted(set(gt["answers"].values()))
+    snaps = {}
+    for s in stems:
+        p = Path(fixture) / "raw" / "snapshots" / f"{s}.md"
+        snaps[s] = _front_block_urls(p) if p.exists() else set()
+    allowed = set().union(*snaps.values()) if snaps else set()
     cited = extract_urls(text)
-    hard = {"urls_from_snapshots": cited <= all_snap_urls and bool(cited)}
+    hard = {"urls_from_snapshots": bool(cited) and cited <= allowed}
     for q, stem in gt["answers"].items():
         m = re.search(rf"{q} SOURCES:\s*(.+)", text)
         q_urls = extract_urls(m.group(1)) if m else set()
@@ -613,10 +648,27 @@ EVALS="$REPO/evals"
 WANT="${1:-all}"
 RUNTIME="${EVAL_RUNTIME:-claude}"
 MAX_TURNS="${EVAL_MAX_TURNS:-60}"
-FIXTURE="${EVAL_WIKI:?EVAL_WIKI must point at a frozen fixture (see snapshot.sh)}"
+[ -n "${EVAL_WIKI:-}" ] || { echo "EVAL_WIKI must point at a frozen fixture (see snapshot.sh)"; exit 2; }
+FIXTURE="$EVAL_WIKI"
 LABELS="${EVAL_LABELS:-$FIXTURE/../eval-labels}"
 [ -f "$FIXTURE/fixture-manifest.json" ] || { echo "no fixture-manifest.json in $FIXTURE — run snapshot.sh first"; exit 2; }
 [ -f "$LABELS/cases.json" ] || { echo "no cases.json in $LABELS"; exit 2; }
+
+# Re-hash the pristine fixture once per suite run — the manifest hash alone
+# only proves labels matched the fixture at snapshot time, not that the
+# fixture is still those bytes today.
+python3 - "$FIXTURE" <<'PYEOF' || exit 2
+import hashlib, json, sys
+from pathlib import Path
+dest = Path(sys.argv[1])
+h = hashlib.sha256()
+for p in sorted(dest.rglob("*")):
+    if p.is_file() and p.name != "fixture-manifest.json":
+        h.update(str(p.relative_to(dest)).encode()); h.update(p.read_bytes())
+m = json.loads((dest / "fixture-manifest.json").read_text())
+if m["content_hash"] != h.hexdigest():
+    sys.exit("REFUSED: fixture content changed since snapshot — re-run snapshot.sh and re-review labels")
+PYEOF
 case "$RUNTIME" in
   claude) MODEL="${EVAL_MODEL:-sonnet}"; command -v claude >/dev/null || { echo "claude CLI missing"; exit 2; } ;;
   gemini) MODEL="${EVAL_MODEL:-gemini-2.5-pro}"; command -v gemini >/dev/null || { echo "gemini CLI missing"; exit 2; } ;;
@@ -652,10 +704,17 @@ build_sandbox() {  # $1 case type; echoes sandbox path
   echo "$SB"
 }
 
-emit_prompt() {  # $1 template, $2 out, then sed-substitutes env-provided vars
-  sed -e "s|{{WIKI_ROOT}}|$SB/wiki-root|g" -e "s|{{PLUGIN_ROOT}}|$SB/plugin|g" \
-      -e "s|{{QUESTION}}|$Q_TEXT|g" -e "s|{{RAW_FILE}}|$RAW_DST|g" \
-      "$1" > "$2"
+emit_prompt() {  # $1 template, $2 out — Python substitution, NOT sed: question
+  # text containing & re-inserts the match silently, | breaks the expression,
+  # newlines are a hard sed error. All realistic in English questions.
+  TMPL="$1" OUT_P="$2" SB="$SB" Q_TEXT="${Q_TEXT:-}" RAW_DST="${RAW_DST:-}" python3 - <<'PYEOF'
+import os
+t = open(os.environ["TMPL"]).read()
+sb = os.environ["SB"]
+t = t.replace("{{WIKI_ROOT}}", sb + "/wiki-root").replace("{{PLUGIN_ROOT}}", sb + "/plugin")
+t = t.replace("{{QUESTION}}", os.environ["Q_TEXT"]).replace("{{RAW_FILE}}", os.environ["RAW_DST"])
+open(os.environ["OUT_P"], "w").write(t)
+PYEOF
 }
 
 overall=0
@@ -665,9 +724,10 @@ print('\n'.join(c['id'] for c in cs))"); do
   [ "$WANT" != "all" ] && [ "$WANT" != "$CASE" ] && continue
   TYPE="$(python3 -c "$CASES_PY
 print([c for c in cs if c['id']=='$CASE'][0]['type'])")"
-  REPS=1
-  [ "$TYPE" = "twin" ] && REPS="$(python3 -c "$CASES_PY
-print([c for c in cs if c['id']=='$CASE'][0].get('reps',3))")"
+  # reps honored for ALL case types — the twin experiment needs ≥3 reps on BOTH
+  # arms (q01–q03 are authored with reps: 3), not just the no-graph arm.
+  REPS="$(python3 -c "$CASES_PY
+print([c for c in cs if c['id']=='$CASE'][0].get('reps',1))")"
 
   rep=1
   while [ "$rep" -le "$REPS" ]; do
@@ -710,6 +770,13 @@ PYEOF
     esac
 
     ( cd "$SB/wiki-root" && run_agent "$PROMPT" "$TRANS" "$OUT/$RUN_ID.stderr.log" ) || true
+    if [ "$TYPE" = "ingest" ]; then
+      # Persist the judge's evidence before the pass-path deletes the sandbox:
+      # digests + top-level entity pages (the backprop targets live there).
+      mkdir -p "$OUT/$RUN_ID-artifacts"
+      cp -R "$SB/wiki-root/wiki/digests" "$OUT/$RUN_ID-artifacts/" 2>/dev/null || true
+      cp "$SB/wiki-root/wiki/"*.md "$OUT/$RUN_ID-artifacts/" 2>/dev/null || true
+    fi
     if python3 "$EVALS/grade.py" --case-id "$RUN_ID" --case-type "$TYPE" \
         --sandbox "$SB/wiki-root" --fixture "$FIXTURE" --labels "$LABELS" \
         --transcript "$TRANS" --out "$OUT/$RUN_ID.grade.json" $PRISTINE_ARG; then
@@ -821,27 +888,33 @@ def collect_query(parsed, fixture, sandbox_wiki):
                 break
     return "\n\n".join(parts)
 
-def collect_ingest(sandbox_wiki, gt):
+def collect_ingest(artifacts_dir, gt):
+    # Reads from .results/<case>-artifacts/ (run.sh persists digests + entity
+    # pages there before the pass-path deletes the sandbox).
     parts = []
-    for dig in (Path(sandbox_wiki) / "wiki" / "digests").glob("*.md"):
+    for dig in sorted((Path(artifacts_dir) / "digests").glob("*.md")):
         if gt["digest_slug"] in dig.stem:
             parts.append(f"===== DIGEST =====\n{dig.read_text()[:PAGE_CAP]}")
     for t in gt["backprop_targets"]:
-        p = Path(sandbox_wiki) / "wiki" / f"{t}.md"
+        p = Path(artifacts_dir) / f"{t}.md"
         if p.exists():
             parts.append(f"===== ENTITY {t} (post-ingest) =====\n{p.read_text()[:PAGE_CAP]}")
     return "\n\n".join(parts)
 
-def collect_reader(parsed, fixture):
+def collect_reader(parsed, fixture, stems):
+    # Evidence = the case's labeled snapshot stems, not the first N of 158.
     parts = [f"===== SYNTHESIS =====\n{parsed['result_text'][:2*PAGE_CAP]}"]
-    for p in sorted((Path(fixture) / "raw" / "snapshots").glob("*.md"))[:6]:
-        parts.append(f"===== SNAPSHOT {p.stem} =====\n{p.read_text()[:PAGE_CAP]}")
+    for s in stems:
+        p = Path(fixture) / "raw" / "snapshots" / f"{s}.md"
+        if p.exists():
+            parts.append(f"===== SNAPSHOT {s} =====\n{p.read_text()[:PAGE_CAP]}")
     return "\n\n".join(parts)
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", required=True)
     ap.add_argument("--fixture", required=True)
+    ap.add_argument("--labels", default=os.environ.get("EVAL_LABELS"))
     ap.add_argument("--executor", default=os.environ.get("EVAL_RUNTIME", "claude"))
     ap.add_argument("--judge", choices=["claude", "gemini", "ollama"])
     ap.add_argument("--model")
@@ -850,16 +923,25 @@ def main():
     judge = a.judge or ("gemini" if a.executor == "claude" else "claude")
     model = a.model or {"gemini": "gemini-2.5-pro", "claude": "sonnet",
                         "ollama": "llama3.1:8b"}[judge]
+    labels = json.loads((Path(a.labels) / "ground-truth.json").read_text()) \
+        if a.labels else {}
     out = {}
     for gpath in sorted(Path(a.results).glob("*.grade.json")):
         d = json.loads(gpath.read_text())
         parsed = G.parse_stream_json(str(Path(a.results) / f"{d['case']}.transcript.jsonl"))
+        base_id = d["case"].split("-rep")[0]
         if d["type"] in ("query", "twin"):
             evidence = collect_query(parsed, a.fixture, None)
         elif d["type"] == "reader":
-            evidence = collect_reader(parsed, a.fixture)
+            gt = labels.get("reader", {}).get(base_id, {})
+            stems = gt.get("snapshots") or sorted(set(gt.get("answers", {}).values()))
+            evidence = collect_reader(parsed, a.fixture, stems)
         else:
-            continue  # ingest sandboxes are deleted on pass; judge kept-failure sandboxes manually
+            gt = labels.get("ingest", {}).get(base_id)
+            art = Path(a.results) / f"{d['case']}-artifacts"
+            if not (gt and art.exists()):
+                continue
+            evidence = collect_ingest(art, gt)
         prompt = f"{RUBRIC}\n\n{evidence}\n\nReturn the JSON now."
         raw = call_judge(judge, model, prompt)
         m = re.search(r"\{.*\}", raw, re.DOTALL)
@@ -876,9 +958,9 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-Known limitation, accepted for v1 (state in README): the judge scores query/twin/reader from results-dir artifacts; ingest outputs live in sandboxes that are deleted on pass — judge ingest only on kept-failure sandboxes, manually. `# ponytail: judge skips passing ingest sandboxes; persist digests into .results if ingest judging matters later.`
+The judge covers all four case types: run.sh persists ingest evidence (digests + entity pages) into `.results/<case>-artifacts/` before the pass-path deletes the sandbox, so "digest quality" — a v1 target — is actually judged, not skipped.
 
-- [ ] **Step 3: Offline test of collectors** (no API call): reuse the Task 6 mini-fixture results dir:
+- [ ] **Step 3: Offline test of collectors** (no API call): reuse the Task 6 mini-fixture results dir (rebuild `/tmp/mini-fixture` via Task 6 Step 2's commands if it was cleaned):
 
 ```bash
 cd evals && python3 - <<'EOF'
@@ -971,11 +1053,11 @@ mkdir -p ~/wiki-eval-fixtures
 bash evals/snapshot.sh ~/Documents/GitHub/ai-content/ai-content-wiki ~/wiki-eval-fixtures/ai-content-wiki-2026-08-08
 ```
 
-- [ ] **Step 2: Author 10 query cases + labels from the snapshot.** Read the snapshot's `wiki/index.md`, `_graph.json` keys, and entity pages; draft questions spanning: 3 single-page lookups (one answerable only via a consolidated-page entity — tests the resolver), 3 cross-page comparisons, 2 evidence-chasing ("what's the evidence for X"), 2 gap questions ("what do we know about Y" where coverage is thin). For each: `relevant` = every page a correct answer could legitimately cite (be generous), `primary` = the 1–3 pages an expert would name first (be strict). Insert the fixture hash. Designate q01–q03 as the twin pairs (`twin01`–`twin03`, `reps: 3` each, questions copied verbatim).
+- [ ] **Step 2: Author 10 query cases + labels from the snapshot.** Read the snapshot's `wiki/index.md`, `_graph.json` keys, and entity pages; draft questions spanning: 3 single-page lookups (one answerable only via a consolidated-page entity — tests the resolver), 3 cross-page comparisons, 2 evidence-chasing ("what's the evidence for X"), 2 gap questions ("what do we know about Y" where coverage is thin). For each: `relevant` = every page a correct answer could legitimately cite (be generous), `primary` = the 1–3 pages an expert would name first (be strict). Insert the fixture hash. Designate q01–q03 as the twin pairs: author **both** `q01`–`q03` and `twin01`–`twin03` with `reps: 3` (questions copied verbatim) — both arms of the twin experiment need ≥3 reps, and run.sh honors `reps` on every case type.
 
 - [ ] **Step 3: Author ingest + reader labels.** For each ingest fixture, list `backprop_targets` = entity pages actually present in the snapshot whose topics the fixture overlaps (verify with `ls` + grep; adjust the target lists to reality). For reader: pick 4–6 snapshot files from `raw/snapshots/` whose content you can answer-key by reading them; write 3 questions with `answers` mapping `Qn` → snapshot stem.
 
-- [ ] **Step 4: Blind-validate the labels** (per the session's standing instruction): dispatch an independent agent with the snapshot path + cases.json + ground-truth.json and the task "for each query, answer it yourself from the wiki, then judge whether the labeled relevant/primary sets are right — flag missing pages, wrong primaries, ambiguous questions." Fix labels per findings.
+- [ ] **Step 4: Blind-validate the labels** (per the session's standing instruction): dispatch an independent agent with the snapshot path + cases.json + ground-truth.json and the task "for each query, answer it yourself from the wiki, then judge whether the labeled relevant/primary sets are right — flag missing pages, wrong primaries, ambiguous questions." Fix labels per findings. Then flag the final labels for Pranay's **async** review (the spec's "reviewed once by Pranay" step — do not block on it; note it in the wrap-up report).
 
 - [ ] **Step 5: Complete `evals/README.md`** — env contract table (EVAL_WIKI, EVAL_LABELS, EVAL_RUNTIME, EVAL_MODEL, EVAL_MAX_TURNS, EVAL_OUT), the three-command quickstart (snapshot → author labels → run), the privacy rules (verbatim from Task 1 stub), metric definitions (P@5 denominator, W formula), the twin protocol (Claude-only, ≥3 reps, mean±spread), and the judge's ingest limitation from Task 7.
 
@@ -985,7 +1067,7 @@ bash evals/snapshot.sh ~/Documents/GitHub/ai-content/ai-content-wiki ~/wiki-eval
 
 ### Task 10: Full suite run + results
 
-- [ ] **Step 1: Deterministic tests first** — `python3 evals/tests/test_grade.py -v` → all PASS (free).
+- [ ] **Step 1: Deterministic tests first** — `python3 evals/tests/test_grade.py -v` AND the plugin's own suite `python3 -m unittest discover -s plugin/tests` → all PASS (free; the spec's "plugin tests run first" means the plugin's, not just the grader's).
 - [ ] **Step 2: 3-case pilot at sonnet** — `EVAL_WIKI=... EVAL_LABELS=... bash evals/run.sh q01` (+ one ingest, + the reader). Inspect grades AND transcripts: are failures real agent failures or harness bugs? Fix harness bugs, rerun. Grade-check disagreements with intuition = suspect the ground truth first.
 - [ ] **Step 3: Full run** — `bash evals/run.sh` (28 executor runs). Then `python3 evals/judge.py --results evals/.results/<ts> --fixture $EVAL_WIKI`.
 - [ ] **Step 4: Twin analysis** — from the 3×3+3×3 twin/query rep grades, compute per-pair mean±spread of weighted tokens and cost; write `evals/.results/<ts>/twin-analysis.md` (private, gitignored) with the graph-vs-grep table.
@@ -994,6 +1076,6 @@ bash evals/snapshot.sh ~/Documents/GitHub/ai-content/ai-content-wiki ~/wiki-eval
 
 ## Self-Review (done at plan time)
 
-- **Spec coverage:** privacy split (T1, T9), snapshot+baseline (T2), metrics incl. P@5 denominator + resolver-from-fixture (T3), hash refusal + delta lint + MANIFEST + no-invented-URLs (T4), footer + non-interactive + step-9 decline + python-not-slash + Qn SOURCES (T5), sandbox env exports + twin mutation + stream-json + MANIFEST seeding + pristine copy (T6), auto-flip judge + collectors + rubric (T7), .invalid fixtures (T8), labels process + blind validation (T9), reps + twin analysis + pilot-first (T10). Gap check: spec's "one arm reuses query runs" — implemented implicitly: q01–q03 runs serve as the with-graph arm's first rep; T10 Step 4 says compute from twin/query rep grades combined. ✓
+- **Spec coverage:** privacy split (T1, T9), snapshot+baseline (T2), metrics incl. P@5 denominator + resolver-from-fixture (T3), hash refusal + delta lint + MANIFEST + no-invented-URLs (T4), footer + non-interactive + step-9 decline + python-not-slash + Qn SOURCES (T5), sandbox env exports + twin mutation + stream-json + MANIFEST seeding + pristine copy (T6), auto-flip judge + collectors + rubric (T7), .invalid fixtures (T8), labels process + blind validation (T9), reps + twin analysis + pilot-first (T10). Gap check: spec's "one arm reuses query runs" — implemented as q01–q03 authored with `reps: 3`, serving as the with-graph arm entirely (9+7 query runs + 9 twin + 2 ingest + 1 reader = 28, matching the spec's arithmetic). ✓
 - **Placeholders:** none — every code block is complete; judge.py's one paste-from-source is named with exact path and function.
 - **Type consistency:** `grade.py` function names/signatures match between T3 tests, T3 impl, T4 CLI, and T7's `import grade as G` usage; cases.json/ground-truth.json shapes match between T4 (reader), T6 (run.sh), T9 (authoring). `twinNN`↔`qNN` aliasing defined T4, used T9. ✓

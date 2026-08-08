@@ -77,7 +77,7 @@ def collect_ingest(artifacts_dir, gt):
     for dig in sorted((Path(artifacts_dir) / "digests").glob("*.md")):
         if gt["digest_slug"] in dig.stem or dig.stem in gt.get("new_digests", []):
             parts.append(f"===== DIGEST =====\n{dig.read_text()[:PAGE_CAP]}")
-    for t in gt["backprop_targets"]:
+    for t in gt.get("backprop_targets", []) + gt.get("backprop_targets_any_of", []):
         p = Path(artifacts_dir) / f"{t}.md"
         if p.exists():
             parts.append(f"===== ENTITY {t} (post-ingest) =====\n{p.read_text()[:PAGE_CAP]}")

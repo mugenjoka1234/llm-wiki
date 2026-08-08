@@ -1,4 +1,4 @@
-import json, os, sys, tempfile, unittest
+import json, os, subprocess, sys, tempfile, unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import grade
 
@@ -78,6 +78,51 @@ class TestIngestChecks(unittest.TestCase):
         self.assertEqual(grade.extract_urls(s),
                          {"https://eval-fixture.invalid/a", "https://x.test/b"})
         self.assertEqual(grade.lint_delta(["w1", "w2"], ["w1"]), ["w2"])
+
+
+class TestCLI(unittest.TestCase):
+    def _fixture(self, d):
+        fx = os.path.join(d, "fx"); os.makedirs(os.path.join(fx, "wiki"))
+        open(os.path.join(fx, "wiki", "page-a.md"), "w").write("a")
+        json.dump({"pages": {}, "entities": {}},
+                  open(os.path.join(fx, "wiki", "_graph.json"), "w"))
+        json.dump({"content_hash": "h" * 64, "lint_baseline": [], "lint_exit": 0},
+                  open(os.path.join(fx, "fixture-manifest.json"), "w"))
+        lb = os.path.join(d, "labels"); os.makedirs(lb)
+        json.dump({"fixture_hash": "h" * 64,
+                   "query": {"q01": {"relevant": ["page-a"], "primary": ["page-a"]}}},
+                  open(os.path.join(lb, "ground-truth.json"), "w"))
+        sb = os.path.join(d, "sb"); os.makedirs(os.path.join(sb, "wiki"))
+        open(os.path.join(sb, "wiki", "page-a.md"), "w").write("a")
+        return fx, lb, sb
+
+    def test_query_pass_and_hash_refusal(self):
+        with tempfile.TemporaryDirectory() as d:
+            fx, lb, sb = self._fixture(d)
+            tr = os.path.join(d, "t.jsonl")
+            with open(tr, "w") as f:
+                f.write(json.dumps({"type": "result", "subtype": "success",
+                    "result": "Answer.\nSOURCES (most relevant first): [[page-a]]",
+                    "usage": {"input_tokens": 1}, "total_cost_usd": 0.01,
+                    "num_turns": 1}))
+            out = os.path.join(d, "g.json")
+            base = [sys.executable, os.path.join(os.path.dirname(__file__), "..", "grade.py"),
+                    "--case-id", "q01", "--case-type", "query", "--sandbox", sb,
+                    "--fixture", fx, "--labels", lb, "--transcript", tr, "--out", out]
+            r = subprocess.run(base, capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            g = json.load(open(out))
+            self.assertTrue(g["pass"]); self.assertEqual(g["metrics"]["mrr"], 1.0)
+            # twin rep id aliases to the paired query labels
+            r_twin = subprocess.run([x if x != "q01" else "twin01-rep2" for x in
+                                     [y if y != "query" else "twin" for y in base]],
+                                    capture_output=True, text=True)
+            self.assertEqual(r_twin.returncode, 0, r_twin.stdout + r_twin.stderr)
+            # hash refusal
+            json.dump({"fixture_hash": "x" * 64, "query": {}},
+                      open(os.path.join(lb, "ground-truth.json"), "w"))
+            r2 = subprocess.run(base, capture_output=True, text=True)
+            self.assertEqual(r2.returncode, 2)
 
 if __name__ == "__main__":
     unittest.main()
